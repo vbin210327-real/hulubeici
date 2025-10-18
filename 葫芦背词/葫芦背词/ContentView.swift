@@ -940,7 +940,7 @@ private struct AddSectionSheet: View {
                             VStack(alignment: .leading, spacing: 8) {
                                 TextField("单词", text: binding(for: entry.id, keyPath: \.word))
                                     .textInputAutocapitalization(.never)
-                                TextField("释义（选填）", text: binding(for: entry.id, keyPath: \.meaning))
+                                TextField("释义", text: binding(for: entry.id, keyPath: \.meaning))
                                     .textInputAutocapitalization(.never)
                             }
                             .padding(.vertical, 6)
