@@ -90,10 +90,13 @@ struct ContentView: View {
             ScrollView {
                 LazyVStack(spacing: 24) {
                     ForEach(bookStore.sections) { section in
+                        let studied = studiedWordCount(for: section)
+                        let progressState = progressStore.progress(for: section.id)
                         NavigationLink(value: section.id) {
                             SectionCardView(
                                 section: section,
-                                studiedWords: studiedWordCount(for: section),
+                                studiedWords: studied,
+                                completedPasses: progressState.completedPasses,
                                 onDelete: {
                                     sectionToDelete = section
                                 },
@@ -184,7 +187,8 @@ struct ContentView: View {
         }
         bookStore.updateSection(section)
         if let updated = bookStore.sections.first(where: { $0.id == section.id }) {
-            progressStore.clampProgress(for: updated.id, totalPages: max(updated.words.chunked(into: wordsPerPage).count, 1))
+            let totalPages = max(updated.words.chunked(into: wordsPerPage).count, 1)
+            progressStore.clampProgress(for: updated.id, totalPages: totalPages, targetPasses: updated.targetPasses)
         }
         editingSection = nil
     }
@@ -194,7 +198,6 @@ struct ContentView: View {
         guard !pages.isEmpty else { return 0 }
         let completedPages = progressStore.completedPages(for: section.id)
         let clamped = max(0, min(completedPages, pages.count))
-        guard clamped > 0 else { return 0 }
         return pages.prefix(clamped).reduce(0) { $0 + $1.count }
     }
 }
@@ -202,8 +205,14 @@ struct ContentView: View {
 private struct SectionCardView: View {
     let section: WordSection
     let studiedWords: Int
+    let completedPasses: Int
     let onDelete: () -> Void
     let onEdit: () -> Void
+
+    private var normalizedPassCount: Int {
+        let target = max(section.targetPasses, 1)
+        return min(max(completedPasses, 0), target)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -216,10 +225,18 @@ private struct SectionCardView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                if section.targetPasses > 1 {
+                    Text("目标遍数 ×\(section.targetPasses)")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             HStack(spacing: 12) {
                 Label("\(section.words.count)/\(studiedWords)", systemImage: "book")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Label("\(section.targetPasses)/\(normalizedPassCount)", systemImage: "repeat")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -336,6 +353,10 @@ private struct WordSectionDetailView: View {
     @State private var didLoadInitialPage = false
     @State private var activeDialAction: GlassDialAction?
 
+    private var progressState: SectionProgressStore.ProgressState {
+        progressStore.progress(for: section.id)
+    }
+
     var body: some View {
         TabView(selection: $currentPage) {
             ForEach(Array(pageEntries.enumerated()), id: \.offset) { index, entries in
@@ -387,8 +408,8 @@ private struct WordSectionDetailView: View {
         .onAppear {
             activeDialAction = nil
             guard !didLoadInitialPage else { return }
-            progressStore.clampProgress(for: section.id, totalPages: pageEntries.count)
-            let nextPage = progressStore.nextPageIndex(for: section.id, totalPages: pageEntries.count)
+            progressStore.clampProgress(for: section.id, totalPages: pageEntries.count, targetPasses: section.targetPasses)
+            let nextPage = progressStore.nextPageIndex(for: section.id, totalPages: pageEntries.count, targetPasses: section.targetPasses)
             currentPage = min(nextPage, max(pageEntries.count - 1, 0))
             enforceForwardOnlyNavigation(for: currentPage)
             didLoadInitialPage = true
@@ -400,7 +421,7 @@ private struct WordSectionDetailView: View {
         .onChange(of: section.words) { _, newWords in
             let pages = newWords.chunked(into: wordsPerPage)
             pageEntries = pages
-            progressStore.clampProgress(for: section.id, totalPages: pages.count)
+            progressStore.clampProgress(for: section.id, totalPages: pages.count, targetPasses: section.targetPasses)
             currentPage = min(currentPage, max(pages.count - 1, 0))
             activeDialAction = nil
             enforceForwardOnlyNavigation(for: currentPage)
@@ -411,7 +432,9 @@ private struct WordSectionDetailView: View {
     }
 
     private var glassDialActions: [GlassDialAction] {
-        let canMark = pageEntries.indices.contains(currentPage)
+        let total = max(pageEntries.count, 1)
+        let targetReached = progressState.completedPasses >= section.targetPasses && progressState.completedPages >= total
+        let canMark = pageEntries.indices.contains(currentPage) && !targetReached
         let canShuffle = pageEntries.indices.contains(currentPage) && pageEntries[currentPage].count > 1
         let entries = currentPageEntries
         let allMeaningsVisible = hideState.areAllMeaningsVisible(for: entries)
@@ -448,8 +471,8 @@ private struct WordSectionDetailView: View {
     private func markCurrentPageCompleted() {
         guard pageEntries.indices.contains(currentPage) else { return }
         let total = pageEntries.count
-        let updatedCompleted = progressStore.markPageCompleted(sectionID: section.id, totalPages: total, pageIndex: currentPage)
-        let targetPage = min(updatedCompleted, max(total - 1, 0))
+        let state = progressStore.markPageCompleted(sectionID: section.id, totalPages: total, pageIndex: currentPage, targetPasses: section.targetPasses)
+        let targetPage = min(state.completedPages, max(total - 1, 0))
         if currentPage != targetPage {
             withAnimation(.easeInOut) {
                 currentPage = targetPage
@@ -917,6 +940,7 @@ private struct AddSectionSheet: View {
     @State private var subtitle: String
     @State private var entries: [AddEntry]
     @State private var errorMessage: String?
+    @State private var targetPasses: Int
 
     let initialSection: WordSection?
     let onSave: (WordSection) -> Void
@@ -930,10 +954,12 @@ private struct AddSectionSheet: View {
             _subtitle = State(initialValue: section.subtitle ?? "")
             let mappedEntries = section.words.map { AddEntry(id: $0.id, word: $0.word, meaning: $0.meaning) }
             _entries = State(initialValue: mappedEntries.isEmpty ? [AddEntry()] : mappedEntries)
+            _targetPasses = State(initialValue: max(section.targetPasses, 1))
         } else {
             _title = State(initialValue: "")
             _subtitle = State(initialValue: "")
             _entries = State(initialValue: [AddEntry()])
+            _targetPasses = State(initialValue: 1)
         }
     }
 
@@ -944,6 +970,13 @@ private struct AddSectionSheet: View {
                     Section("基本信息") {
                         TextField("词书名称", text: $title)
                         TextField("补充信息（选填）", text: $subtitle)
+                        Stepper {
+                            Text("目标遍数：\(targetPasses)")
+                        } onIncrement: {
+                            targetPasses += 1
+                        } onDecrement: {
+                            targetPasses = max(1, targetPasses - 1)
+                        }
                     }
 
                     Section("单词列表") {
@@ -1020,7 +1053,8 @@ private struct AddSectionSheet: View {
             id: initialSection?.id ?? UUID(),
             title: trimmedTitle,
             subtitle: trimmedSubtitle.isEmpty ? nil : trimmedSubtitle,
-            words: parsedEntries
+            words: parsedEntries,
+            targetPasses: targetPasses
         )
 
         onSave(newSection)
@@ -1073,21 +1107,50 @@ struct WordSection: Identifiable, Codable {
     let title: String
     let subtitle: String?
     let words: [WordEntry]
+    let targetPasses: Int
 
-    fileprivate init(id: UUID = UUID(), title: String, subtitle: String? = nil, words: [WordEntry]) {
+    private enum CodingKeys: String, CodingKey {
+        case id, title, subtitle, words, targetPasses
+    }
+
+    fileprivate init(id: UUID = UUID(), title: String, subtitle: String? = nil, words: [WordEntry], targetPasses: Int = 1) {
         self.id = id
         self.title = title
         self.subtitle = subtitle
         self.words = words
+        self.targetPasses = max(targetPasses, 1)
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        title = try container.decode(String.self, forKey: .title)
+        subtitle = try container.decodeIfPresent(String.self, forKey: .subtitle)
+        words = try container.decode([WordEntry].self, forKey: .words)
+        targetPasses = try container.decodeIfPresent(Int.self, forKey: .targetPasses) ?? 1
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(title, forKey: .title)
+        try container.encodeIfPresent(subtitle, forKey: .subtitle)
+        try container.encode(words, forKey: .words)
+        try container.encode(targetPasses, forKey: .targetPasses)
     }
 
     func updatingWords(_ newWords: [WordEntry]) -> WordSection {
-        WordSection(id: id, title: title, subtitle: subtitle, words: newWords)
+        WordSection(id: id, title: title, subtitle: subtitle, words: newWords, targetPasses: targetPasses)
     }
 }
 
 final class SectionProgressStore: ObservableObject {
-    @Published private var completedPages: [UUID: Int] = [:] {
+    struct ProgressState: Codable, Equatable {
+        var completedPages: Int = 0
+        var completedPasses: Int = 0
+    }
+
+    @Published private var progressStates: [UUID: ProgressState] = [:] {
         didSet { persist() }
     }
 
@@ -1097,49 +1160,93 @@ final class SectionProgressStore: ObservableObject {
 
     init(userDefaults: UserDefaults = .standard) {
         self.defaults = userDefaults
-        if let data = userDefaults.data(forKey: defaultsKey),
-           let decoded = try? JSONDecoder().decode([UUID: Int].self, from: data) {
-            isRestoring = true
-            completedPages = decoded
-            isRestoring = false
+        if let data = userDefaults.data(forKey: defaultsKey) {
+            if let decoded = try? JSONDecoder().decode([UUID: ProgressState].self, from: data) {
+                isRestoring = true
+                progressStates = decoded
+                isRestoring = false
+            } else if let legacy = try? JSONDecoder().decode([UUID: Int].self, from: data) {
+                isRestoring = true
+                progressStates = legacy.reduce(into: [:]) { result, element in
+                    result[element.key] = ProgressState(completedPages: element.value, completedPasses: 0)
+                }
+                isRestoring = false
+            }
         }
+    }
+
+    func progress(for sectionID: UUID) -> ProgressState {
+        progressStates[sectionID] ?? ProgressState()
     }
 
     func completedPages(for sectionID: UUID) -> Int {
-        max(0, completedPages[sectionID] ?? 0)
+        max(0, min(progress(for: sectionID).completedPages, Int.max))
     }
 
-    func nextPageIndex(for sectionID: UUID, totalPages: Int) -> Int {
+    func completedPasses(for sectionID: UUID) -> Int {
+        max(0, progress(for: sectionID).completedPasses)
+    }
+
+    func nextPageIndex(for sectionID: UUID, totalPages: Int, targetPasses: Int) -> Int {
         guard totalPages > 0 else { return 0 }
-        return min(completedPages(for: sectionID), max(totalPages - 1, 0))
+        let state = progress(for: sectionID)
+        let target = max(1, targetPasses)
+        if state.completedPasses >= target {
+            return max(totalPages - 1, 0)
+        }
+        return min(state.completedPages, max(totalPages - 1, 0))
     }
 
     @discardableResult
-    func markPageCompleted(sectionID: UUID, totalPages: Int, pageIndex: Int) -> Int {
-        guard totalPages > 0 else { return 0 }
-        let current = completedPages(for: sectionID)
-        let newValue = min(totalPages, max(current, pageIndex + 1))
-        completedPages[sectionID] = newValue
-        return completedPages(for: sectionID)
+    func markPageCompleted(sectionID: UUID, totalPages: Int, pageIndex: Int, targetPasses: Int) -> ProgressState {
+        guard totalPages > 0 else { return progress(for: sectionID) }
+        var state = progress(for: sectionID)
+        let target = max(1, targetPasses)
+        if state.completedPasses >= target && state.completedPages >= totalPages {
+            return state
+        }
+
+        let nextPage = pageIndex + 1
+        if nextPage >= totalPages {
+            if state.completedPasses + 1 >= target {
+                state.completedPasses = min(state.completedPasses + 1, target)
+                state.completedPages = totalPages
+            } else {
+                state.completedPasses += 1
+                state.completedPages = 0
+            }
+        } else {
+            state.completedPages = max(state.completedPages, nextPage)
+        }
+
+        progressStates[sectionID] = state
+        return state
     }
 
-    fileprivate func clampProgress(for sectionID: UUID, totalPages: Int) {
-        guard totalPages > 0 else {
-            completedPages[sectionID] = 0
-            return
+    fileprivate func clampProgress(for sectionID: UUID, totalPages: Int, targetPasses: Int) {
+        var state = progress(for: sectionID)
+        let target = max(1, targetPasses)
+        state.completedPasses = min(state.completedPasses, target)
+
+        if totalPages <= 0 {
+            state.completedPages = 0
+        } else {
+            state.completedPages = min(state.completedPages, totalPages)
+            if state.completedPasses >= target {
+                state.completedPages = totalPages
+            }
         }
-        if let stored = completedPages[sectionID], stored > totalPages {
-            completedPages[sectionID] = totalPages
-        }
+
+        progressStates[sectionID] = state
     }
 
     func resetProgress(for sectionID: UUID) {
-        completedPages.removeValue(forKey: sectionID)
+        progressStates.removeValue(forKey: sectionID)
     }
 
     private func persist() {
         guard !isRestoring,
-              let data = try? JSONEncoder().encode(completedPages) else { return }
+              let data = try? JSONEncoder().encode(progressStates) else { return }
         defaults.set(data, forKey: defaultsKey)
     }
 }
@@ -1319,7 +1426,8 @@ private enum BundledWordBookLoader {
             id: sectionID,
             title: "高中英语词汇3500乱序",
             subtitle: subtitle,
-            words: entries
+            words: entries,
+            targetPasses: 1
         )
     }
 
@@ -1371,7 +1479,8 @@ private extension WordSection {
                 WordEntry(word: "prerequisite", meaning: "n. 先决条件；必须先具备的"),
                 WordEntry(word: "mentor", meaning: "n. 导师；顾问"),
                 WordEntry(word: "transcript", meaning: "n. 成绩单；抄本")
-            ]
+            ],
+            targetPasses: 1
         ),
         WordSection(
             title: "Unit 2 · Daily Essentials",
@@ -1395,7 +1504,8 @@ private extension WordSection {
                 WordEntry(word: "merchant", meaning: "n. 商人；批发商"),
                 WordEntry(word: "checkout", meaning: "n. 结账台；检查"),
                 WordEntry(word: "refund", meaning: "n./v. 退款；退还")
-            ]
+            ],
+            targetPasses: 1
         ),
         WordSection(
             title: "IELTS 高频词",
@@ -1426,7 +1536,8 @@ private extension WordSection {
                 WordEntry(word: "impede", meaning: "v. 阻碍；妨碍"),
                 WordEntry(word: "inevitable", meaning: "adj. 不可避免的；必然发生的"),
                 WordEntry(word: "mitigate", meaning: "v. 缓和；减轻")
-            ]
+            ],
+            targetPasses: 1
         )
     ]
 }
