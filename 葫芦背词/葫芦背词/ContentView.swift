@@ -936,23 +936,20 @@ private struct AddSectionSheet: View {
                     }
 
                     Section("单词列表") {
-                        ForEach($entries) { $entry in
+                        ForEach(entries, id: \.id) { entry in
                             VStack(alignment: .leading, spacing: 8) {
-                                TextField("单词", text: $entry.word)
+                                TextField("单词", text: binding(for: entry.id, keyPath: \.word))
                                     .textInputAutocapitalization(.never)
-                                TextField("释义（选填）", text: $entry.meaning)
+                                TextField("释义（选填）", text: binding(for: entry.id, keyPath: \.meaning))
                                     .textInputAutocapitalization(.never)
                             }
                             .padding(.vertical, 6)
-                        }
-
-                        if entries.count > 1 {
-                            Button(role: .destructive) {
-                                if entries.count > 1 {
-                                    entries.removeLast()
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button(role: .destructive) {
+                                    removeEntry(withID: entry.id)
+                                } label: {
+                                    Label("删除", systemImage: "trash")
                                 }
-                            } label: {
-                                Label("撤回最后一个单词", systemImage: "minus.circle")
                             }
                         }
 
@@ -1017,6 +1014,30 @@ private struct AddSectionSheet: View {
 
         onSave(newSection)
         dismiss()
+    }
+
+    private func removeEntry(withID id: UUID) {
+        entries.removeAll { $0.id == id }
+        if entries.isEmpty {
+            entries.append(AddEntry())
+        }
+    }
+
+    private func binding<Value>(for id: UUID, keyPath: WritableKeyPath<AddEntry, Value>) -> Binding<Value> {
+        Binding(
+            get: {
+                if let index = entries.firstIndex(where: { $0.id == id }) {
+                    return entries[index][keyPath: keyPath]
+                }
+                let fallback = AddEntry()[keyPath: keyPath]
+                return fallback
+            },
+            set: { newValue in
+                if let index = entries.firstIndex(where: { $0.id == id }) {
+                    entries[index][keyPath: keyPath] = newValue
+                }
+            }
+        )
     }
 }
 
