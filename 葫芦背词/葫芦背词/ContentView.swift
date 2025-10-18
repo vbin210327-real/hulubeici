@@ -93,6 +93,7 @@ struct ContentView: View {
                         NavigationLink(value: section.id) {
                             SectionCardView(
                                 section: section,
+                                studiedWords: studiedWordCount(for: section),
                                 onDelete: {
                                     sectionToDelete = section
                                 },
@@ -187,10 +188,20 @@ struct ContentView: View {
         }
         editingSection = nil
     }
+
+    private func studiedWordCount(for section: WordSection) -> Int {
+        let pages = section.words.chunked(into: wordsPerPage)
+        guard !pages.isEmpty else { return 0 }
+        let completedPages = progressStore.completedPages(for: section.id)
+        let clamped = max(0, min(completedPages, pages.count))
+        guard clamped > 0 else { return 0 }
+        return pages.prefix(clamped).reduce(0) { $0 + $1.count }
+    }
 }
 
 private struct SectionCardView: View {
     let section: WordSection
+    let studiedWords: Int
     let onDelete: () -> Void
     let onEdit: () -> Void
 
@@ -208,7 +219,7 @@ private struct SectionCardView: View {
             }
 
             HStack(spacing: 12) {
-                Label("\(section.words.count) 词", systemImage: "book")
+                Label("\(section.words.count)/\(studiedWords)", systemImage: "book")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
