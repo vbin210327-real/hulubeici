@@ -379,6 +379,7 @@ private struct WordSectionDetailView: View {
             progressStore.clampProgress(for: section.id, totalPages: pageEntries.count)
             let nextPage = progressStore.nextPageIndex(for: section.id, totalPages: pageEntries.count)
             currentPage = min(nextPage, max(pageEntries.count - 1, 0))
+            enforceForwardOnlyNavigation(for: currentPage)
             didLoadInitialPage = true
         }
         .onChange(of: section.id) { _, _ in
@@ -391,14 +392,15 @@ private struct WordSectionDetailView: View {
             progressStore.clampProgress(for: section.id, totalPages: pages.count)
             currentPage = min(currentPage, max(pages.count - 1, 0))
             activeDialAction = nil
+            enforceForwardOnlyNavigation(for: currentPage)
+        }
+        .onChange(of: currentPage) { _, newValue in
+            enforceForwardOnlyNavigation(for: newValue)
         }
     }
 
     private var glassDialActions: [GlassDialAction] {
-        let completed = progressStore.completedPages(for: section.id)
-        let total = max(pageEntries.count, 1)
         let canMark = pageEntries.indices.contains(currentPage)
-        let canAdvance = (currentPage < total - 1) || completed < total
         let canShuffle = pageEntries.indices.contains(currentPage) && pageEntries[currentPage].count > 1
         let entries = currentPageEntries
         let allMeaningsVisible = hideState.areAllMeaningsVisible(for: entries)
@@ -407,22 +409,6 @@ private struct WordSectionDetailView: View {
         return [
             GlassDialAction(
                 slot: .leading,
-                systemImage: "checkmark.circle",
-                title: "标记完成",
-                highlightColor: Color(red: 0.36, green: 0.82, blue: 0.64),
-                isEnabled: canMark,
-                handler: markCurrentPageCompleted
-            ),
-            GlassDialAction(
-                slot: .trailing,
-                systemImage: "arrow.right.circle",
-                title: "下一页",
-                highlightColor: Color(red: 0.3, green: 0.6, blue: 1.0),
-                isEnabled: canAdvance,
-                handler: jumpToNextPage
-            ),
-            GlassDialAction(
-                slot: .top,
                 systemImage: "shuffle",
                 title: "打乱顺序",
                 highlightColor: Color(red: 0.68, green: 0.48, blue: 0.98),
@@ -430,28 +416,33 @@ private struct WordSectionDetailView: View {
                 handler: shuffleCurrentPage
             ),
             GlassDialAction(
-                slot: .bottom,
+                slot: .trailing,
                 systemImage: allMeaningsVisible ? "eye.slash" : "eye",
                 title: allMeaningsVisible ? "隐藏释义" : "显示释义",
                 highlightColor: Color(red: 1.0, green: 0.62, blue: 0.34),
                 isEnabled: canToggleMeanings,
                 handler: toggleCurrentPageMeaningsVisibility
+            ),
+            GlassDialAction(
+                slot: .bottom,
+                systemImage: "checkmark.circle",
+                title: "完成并继续",
+                highlightColor: Color(red: 0.36, green: 0.82, blue: 0.64),
+                isEnabled: canMark,
+                handler: markCurrentPageCompleted
             )
         ]
     }
 
     private func markCurrentPageCompleted() {
         guard pageEntries.indices.contains(currentPage) else { return }
-        _ = progressStore.markPageCompleted(sectionID: section.id, totalPages: pageEntries.count, pageIndex: currentPage)
-    }
-
-    private func jumpToNextPage() {
         let total = pageEntries.count
-        guard total > 0 else { return }
-        let completed = progressStore.completedPages(for: section.id)
-        let suggested = max(min(completed, total - 1), currentPage + 1)
-        withAnimation(.easeInOut) {
-            currentPage = min(suggested, total - 1)
+        let updatedCompleted = progressStore.markPageCompleted(sectionID: section.id, totalPages: total, pageIndex: currentPage)
+        let targetPage = min(updatedCompleted, max(total - 1, 0))
+        if currentPage != targetPage {
+            withAnimation(.easeInOut) {
+                currentPage = targetPage
+            }
         }
     }
 
@@ -467,6 +458,19 @@ private struct WordSectionDetailView: View {
     private var currentPageEntries: [WordEntry] {
         guard pageEntries.indices.contains(currentPage) else { return [] }
         return pageEntries[currentPage]
+    }
+
+    private func enforceForwardOnlyNavigation(for requestedPage: Int) {
+        let total = pageEntries.count
+        guard total > 0 else { return }
+        let completed = progressStore.completedPages(for: section.id)
+        let minAllowed = min(completed, max(total - 1, 0))
+        guard requestedPage >= minAllowed else {
+            withAnimation(.easeInOut) {
+                currentPage = minAllowed
+            }
+            return
+        }
     }
 
     private func toggleCurrentPageMeaningsVisibility() {
@@ -661,12 +665,12 @@ private struct GlassDial: View {
 
                 if let action = leadingAction {
                     slotView(for: action, radius: radius, isActive: activeSlot == .leading)
-                        .offset(x: -radius * 0.75)
+                        .offset(x: -radius * 0.6, y: -radius * 0.5)
                 }
 
                 if let action = trailingAction {
                     slotView(for: action, radius: radius, isActive: activeSlot == .trailing)
-                        .offset(x: radius * 0.75)
+                        .offset(x: radius * 0.6, y: -radius * 0.5)
                 }
 
                 if let action = topAction {
@@ -866,17 +870,23 @@ private struct GlassDial: View {
         let threshold = radius * 0.32
         let distance = hypot(translation.width, translation.height)
         guard distance > threshold else { return nil }
-        if translation.width > abs(translation.height), translation.width > threshold {
-            return .trailing
-        } else if -translation.width > abs(translation.height), translation.width < -threshold {
-            return .leading
-        } else if -translation.height > abs(translation.width), translation.height < -threshold {
-            return .top
-        } else if translation.height > abs(translation.width), translation.height > threshold {
+        if translation.height > threshold {
             return .bottom
-        } else {
-            return nil
         }
+        if translation.height < -threshold {
+            if translation.width >= 0 {
+                return .trailing
+            } else {
+                return .leading
+            }
+        }
+        if translation.width < -threshold * 0.6 {
+            return .leading
+        }
+        if translation.width > threshold * 0.6 {
+            return .trailing
+        }
+        return nil
     }
 
     private func clamp(_ offset: CGSize, radius: CGFloat) -> CGSize {
@@ -918,58 +928,65 @@ private struct AddSectionSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("基本信息") {
-                    TextField("词书名称", text: $title)
-                    TextField("补充信息（选填）", text: $subtitle)
-                }
-
-                Section("单词列表") {
-                    ForEach($entries) { $entry in
-                        VStack(alignment: .leading, spacing: 8) {
-                            TextField("单词", text: $entry.word)
-                                .textInputAutocapitalization(.never)
-                            TextField("释义（选填）", text: $entry.meaning)
-                                .textInputAutocapitalization(.never)
-                        }
-                        .padding(.vertical, 6)
+            ScrollViewReader { proxy in
+                Form {
+                    Section("基本信息") {
+                        TextField("词书名称", text: $title)
+                        TextField("补充信息（选填）", text: $subtitle)
                     }
 
-                    if entries.count > 1 {
-                        Button(role: .destructive) {
-                            if entries.count > 1 {
-                                entries.removeLast()
+                    Section("单词列表") {
+                        ForEach($entries) { $entry in
+                            VStack(alignment: .leading, spacing: 8) {
+                                TextField("单词", text: $entry.word)
+                                    .textInputAutocapitalization(.never)
+                                TextField("释义（选填）", text: $entry.meaning)
+                                    .textInputAutocapitalization(.never)
+                            }
+                            .padding(.vertical, 6)
+                        }
+
+                        if entries.count > 1 {
+                            Button(role: .destructive) {
+                                if entries.count > 1 {
+                                    entries.removeLast()
+                                }
+                            } label: {
+                                Label("撤回最后一个单词", systemImage: "minus.circle")
+                            }
+                        }
+
+                        Button {
+                            let newEntry = AddEntry()
+                            entries.append(newEntry)
+                            DispatchQueue.main.async {
+                                withAnimation {
+                                    proxy.scrollTo(newEntry.id, anchor: .bottom)
+                                }
                             }
                         } label: {
-                            Label("撤回最后一个单词", systemImage: "minus.circle")
+                            Label("添加单词", systemImage: "plus.circle")
                         }
                     }
-
-                    Button {
-                        entries.append(AddEntry())
-                    } label: {
-                        Label("添加单词", systemImage: "plus.circle")
+                }
+                .navigationTitle(initialSection == nil ? "添加自定义词书" : "编辑词书")
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("取消") { dismiss() }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("保存") {
+                            saveSection()
+                        }
+                        .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     }
                 }
-
-            }
-            .navigationTitle(initialSection == nil ? "添加自定义词书" : "编辑词书")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { dismiss() }
+                .alert(errorMessage ?? "", isPresented: Binding(
+                    get: { errorMessage != nil },
+                    set: { _ in errorMessage = nil }
+                )) {
+                    Button("好的", role: .cancel) {}
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
-                        saveSection()
-                    }
-                    .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-            }
-            .alert(errorMessage ?? "", isPresented: Binding(
-                get: { errorMessage != nil },
-                set: { _ in errorMessage = nil }
-            )) {
-                Button("好的", role: .cancel) {}
             }
         }
     }
