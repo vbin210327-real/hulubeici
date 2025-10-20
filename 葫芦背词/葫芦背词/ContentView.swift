@@ -941,6 +941,7 @@ private struct AddSectionSheet: View {
     @State private var entries: [AddEntry]
     @State private var errorMessage: String?
     @State private var targetPasses: Int
+    @State private var searchText: String
 
     let initialSection: WordSection?
     let onSave: (WordSection) -> Void
@@ -955,11 +956,13 @@ private struct AddSectionSheet: View {
             let mappedEntries = section.words.map { AddEntry(id: $0.id, word: $0.word, meaning: $0.meaning) }
             _entries = State(initialValue: mappedEntries.isEmpty ? [AddEntry()] : mappedEntries)
             _targetPasses = State(initialValue: max(section.targetPasses, 1))
+            _searchText = State(initialValue: "")
         } else {
             _title = State(initialValue: "")
             _subtitle = State(initialValue: "")
             _entries = State(initialValue: [AddEntry()])
             _targetPasses = State(initialValue: 1)
+            _searchText = State(initialValue: "")
         }
     }
 
@@ -980,7 +983,19 @@ private struct AddSectionSheet: View {
                     }
 
                     Section("单词列表") {
-                        ForEach(entries, id: \.id) { entry in
+                        TextField("搜索单词", text: $searchText)
+                            .textInputAutocapitalization(.never)
+                            .disableAutocorrection(true)
+
+                        let filteredEntries = searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            ? entries
+                            : entries.filter { $0.word.localizedCaseInsensitiveContains(searchText) }
+
+                        if filteredEntries.isEmpty {
+                            ContentUnavailableView("未找到匹配的单词", systemImage: "magnifyingglass")
+                        }
+
+                        ForEach(filteredEntries, id: \.id) { entry in
                             VStack(alignment: .leading, spacing: 8) {
                                 TextField("单词", text: binding(for: entry.id, keyPath: \.word))
                                     .textInputAutocapitalization(.never)
