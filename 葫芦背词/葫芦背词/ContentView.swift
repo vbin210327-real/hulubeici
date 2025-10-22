@@ -84,6 +84,7 @@ struct ContentView: View {
     @State private var editingSection: WordSection?
     @StateObject private var hideState = WordVisibilityStore()
     @StateObject private var progressStore = SectionProgressStore()
+    @State private var showingAutomationAgent = false
 
     var body: some View {
         NavigationStack {
@@ -129,6 +130,15 @@ struct ContentView: View {
                 }
             }
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        showingAutomationAgent = true
+                    } label: {
+                        Image(systemName: "bolt.fill")
+                            .font(.title3)
+                    }
+                    .accessibilityLabel("批量导入单词")
+                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
                         showingAddSection = true
@@ -159,6 +169,11 @@ struct ContentView: View {
             .environmentObject(progressStore)
             .presentationDetents([.medium, .large])
         })
+        .sheet(isPresented: $showingAutomationAgent) {
+            AutomationAgentSheet()
+                .environmentObject(bookStore)
+                .environmentObject(progressStore)
+        }
         .alert("删除词书", isPresented: Binding(
             get: { sectionToDelete != nil },
             set: { newValue in
@@ -194,11 +209,12 @@ struct ContentView: View {
     }
 
     private func studiedWordCount(for section: WordSection) -> Int {
-        let pages = section.words.chunked(into: wordsPerPage)
-        guard !pages.isEmpty else { return 0 }
-        let completedPages = progressStore.completedPages(for: section.id)
-        let clamped = max(0, min(completedPages, pages.count))
-        return pages.prefix(clamped).reduce(0) { $0 + $1.count }
+        let totalWords = section.words.count
+        guard totalWords > 0 else { return 0 }
+        let totalPages = max(1, (totalWords + wordsPerPage - 1) / wordsPerPage)
+        let completedPages = max(0, min(progressStore.completedPages(for: section.id), totalPages))
+        let estimatedWords = completedPages * wordsPerPage
+        return min(estimatedWords, totalWords)
     }
 }
 
@@ -1098,6 +1114,193 @@ private struct AddSectionSheet: View {
                 }
             }
         )
+    }
+}
+
+private struct AutomationAgentSheet: View {
+    @EnvironmentObject private var bookStore: WordBookStore
+    @EnvironmentObject private var progressStore: SectionProgressStore
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var rawInput: String = ""
+    @State private var resultMessage: String?
+    @State private var errorMessage: String?
+    @State private var isProcessing = false
+
+    private struct ParsedEntry {
+        let book: String
+        let word: String
+        let meaning: String
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("按照 “词书名称|单词|释义” 的格式逐行粘贴内容，示例：\n高中词汇|abandon|v. 放弃\n雅思词汇|accommodate|v. 容纳")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+
+                ZStack(alignment: .topLeading) {
+                    if rawInput.isEmpty {
+                        Text("词书名称|单词|释义")
+                            .foregroundStyle(Color.secondary.opacity(0.5))
+                            .padding(.top, 8)
+                            .padding(.horizontal, 6)
+                    }
+                    TextEditor(text: $rawInput)
+                        .font(.system(.body, design: .monospaced))
+                        .frame(minHeight: 220)
+                        .padding(10)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(Color.secondary.opacity(0.25))
+                        )
+                }
+
+        if let resultMessage {
+                    Label(resultMessage, systemImage: "checkmark.circle")
+                        .foregroundStyle(Color.green)
+                }
+
+                if let errorMessage {
+                    Label(errorMessage, systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(Color.orange)
+                }
+
+                Spacer()
+            }
+            .padding()
+            .navigationTitle("批量导入单词")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button {
+                        processInput()
+                    } label: {
+                        Text(isProcessing ? "处理中…" : "开始导入")
+                    }
+                    .disabled(isProcessing)
+                }
+            }
+        }
+    }
+
+    private func processInput() {
+        let trimmed = rawInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            errorMessage = "请输入需要导入的单词。"
+            resultMessage = nil
+            return
+        }
+
+        isProcessing = true
+        defer { isProcessing = false }
+
+        let lines = trimmed.components(separatedBy: .newlines)
+        var parsedEntries: [ParsedEntry] = []
+        var invalidLines: [String] = []
+
+        for rawLine in lines {
+            let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !line.isEmpty else { continue }
+            let components = line.components(separatedBy: "|")
+            guard components.count >= 3 else {
+                invalidLines.append(rawLine)
+                continue
+            }
+            let book = components[0].trimmingCharacters(in: .whitespacesAndNewlines)
+            let word = components[1].trimmingCharacters(in: .whitespacesAndNewlines)
+            let meaning = components.dropFirst(2).joined(separator: "|").trimmingCharacters(in: .whitespacesAndNewlines)
+
+            guard !book.isEmpty, !word.isEmpty else {
+                invalidLines.append(rawLine)
+                continue
+            }
+
+            parsedEntries.append(ParsedEntry(book: book, word: word, meaning: meaning.isEmpty ? "-" : meaning))
+        }
+
+        guard !parsedEntries.isEmpty else {
+            errorMessage = "没有可导入的单词，请检查格式。"
+            resultMessage = nil
+            return
+        }
+
+        var groupedEntries: [String: [ParsedEntry]] = [:]
+        for entry in parsedEntries {
+            groupedEntries[entry.book, default: []].append(entry)
+        }
+
+        var totalAdded = 0
+        var touchedBooks: Set<String> = []
+
+        for (bookTitle, entries) in groupedEntries {
+            let normalizedTitle = bookTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !normalizedTitle.isEmpty else { continue }
+
+            if let index = bookStore.sections.firstIndex(where: { $0.title.compare(normalizedTitle, options: .caseInsensitive) == .orderedSame }) {
+                let existing = bookStore.sections[index]
+                var existingWords = Set(existing.words.map { $0.word.lowercased() })
+                var newEntries: [WordEntry] = []
+
+                for item in entries {
+                    let lower = item.word.lowercased()
+                    if existingWords.contains(lower) { continue }
+                    let entry = WordEntry(word: item.word, meaning: item.meaning)
+                    newEntries.append(entry)
+                    existingWords.insert(lower)
+                }
+
+                guard !newEntries.isEmpty else { continue }
+
+                var mergedWords = existing.words
+                mergedWords.append(contentsOf: newEntries)
+                let updatedSection = WordSection(
+                    id: existing.id,
+                    title: existing.title,
+                    subtitle: existing.subtitle,
+                    words: mergedWords,
+                    targetPasses: existing.targetPasses
+                )
+
+                bookStore.updateSection(updatedSection)
+                let totalPages = max(mergedWords.chunked(into: wordsPerPage).count, 1)
+                progressStore.clampProgress(for: updatedSection.id, totalPages: totalPages, targetPasses: updatedSection.targetPasses)
+                totalAdded += newEntries.count
+                touchedBooks.insert(existing.title)
+            } else {
+                let newWords = entries.map { WordEntry(word: $0.word, meaning: $0.meaning) }
+                guard !newWords.isEmpty else { continue }
+                let newSection = WordSection(
+                    title: normalizedTitle,
+                    subtitle: nil,
+                    words: newWords,
+                    targetPasses: 1
+                )
+                bookStore.addSection(newSection)
+                let totalPages = max(newWords.chunked(into: wordsPerPage).count, 1)
+                progressStore.clampProgress(for: newSection.id, totalPages: totalPages, targetPasses: newSection.targetPasses)
+                totalAdded += newWords.count
+                touchedBooks.insert(newSection.title)
+            }
+        }
+
+        if totalAdded > 0 {
+            resultMessage = "已向 \(touchedBooks.count) 个词书添加 \(totalAdded) 个单词。"
+        } else {
+            resultMessage = "没有新单词被导入（可能与现有词条重复）。"
+        }
+
+        if invalidLines.isEmpty {
+            errorMessage = nil
+        } else {
+            let preview = invalidLines.prefix(3).joined(separator: "；")
+            errorMessage = "以下行无法解析：\(preview)\(invalidLines.count > 3 ? " 等" : "")"
+        }
     }
 }
 
