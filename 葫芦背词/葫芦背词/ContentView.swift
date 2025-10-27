@@ -7,8 +7,1203 @@
 
 import SwiftUI
 import Foundation
+import UIKit
 
 private let wordsPerPage = 10
+private let appTealColor = Color(red: 0.27, green: 0.63, blue: 0.55) // 湖绿色 #45A08C
+
+private enum MainTab: CaseIterable {
+    case home
+    case progress
+    case profile
+
+    var title: String {
+        switch self {
+        case .home: return "主页"
+        case .progress: return "进度"
+        case .profile: return "我的"
+        }
+    }
+
+    var activeSymbol: String {
+        switch self {
+            case .home: return "house.fill"
+            case .progress: return "chart.bar.fill"
+            case .profile: return "person.crop.circle.fill"
+        }
+    }
+
+    var inactiveSymbol: String {
+        switch self {
+        case .home: return "house"
+        case .progress: return "chart.bar"
+        case .profile: return "person.crop.circle"
+        }
+    }
+
+    var order: Int {
+        switch self {
+        case .home: return 0
+        case .progress: return 1
+        case .profile: return 2
+        }
+    }
+}
+
+private func studiedWordCount(for section: WordSection, progressStore: SectionProgressStore) -> Int {
+    let totalWords = section.words.count
+    guard totalWords > 0 else { return 0 }
+    let totalPages = max(1, (totalWords + wordsPerPage - 1) / wordsPerPage)
+    let completedPages = max(0, min(progressStore.completedPages(for: section.id), totalPages))
+    let estimatedWords = completedPages * wordsPerPage
+    return min(estimatedWords, totalWords)
+}
+
+private struct BottomTabBar: View {
+    @Binding var selectedTab: MainTab
+    let onAddSection: () -> Void
+    let showAddButton: Bool
+
+    var body: some View {
+        HStack(alignment: .bottom, spacing: 0) {
+            // Left side tabs
+            HStack(spacing: 0) {
+                ForEach(MainTab.allCases, id: \.self) { tab in
+                    let isSelected = tab == selectedTab
+                    Button {
+                        selectedTab = tab
+                        Haptic.trigger(.medium)
+                    } label: {
+                        let tint = labelColor(for: tab)
+                        tabIcon(for: tab, isSelected: isSelected, tint: tint)
+                            .frame(width: 44, height: 44)
+                            .frame(maxWidth: .infinity)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            // Add button on the right
+            if showAddButton {
+                Button {
+                    Haptic.trigger(.heavy)
+                    onAddSection()
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 24, weight: .thin))
+                        .foregroundStyle(Color.white)
+                        .frame(width: 56, height: 56)
+                        .background(
+                            Circle()
+                                .fill(Color(red: 0.15, green: 0.15, blue: 0.15))
+                        )
+                        .shadow(color: .black.opacity(0.15), radius: 8, x: 0, y: 4)
+                }
+                .buttonStyle(.plain)
+                .contentShape(Circle())
+                .padding(.trailing, 4)
+            } else {
+                Spacer()
+                    .frame(width: 70)
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 6)
+        .padding(.bottom, 6)
+        .background(
+            Color(.systemBackground)
+                .ignoresSafeArea(edges: .bottom)
+        )
+    }
+
+    private func symbol(for tab: MainTab, isSelected: Bool) -> String {
+        isSelected ? tab.activeSymbol : tab.inactiveSymbol
+    }
+
+    @ViewBuilder
+    private func tabIcon(for tab: MainTab, isSelected: Bool, tint: Color) -> some View {
+        switch tab {
+        case .profile:
+            UserIconView(color: tint, lineWidth: 1.5, isSelected: isSelected)
+                .frame(width: 26, height: 26)
+        case .home:
+            HouseIconView(color: tint, lineWidth: 1.5, isSelected: isSelected)
+                .frame(width: 26, height: 26)
+        case .progress:
+            BarsIconView(color: tint, lineWidth: 1.5, isSelected: isSelected)
+                .frame(width: 26, height: 26)
+        }
+    }
+
+    private func labelColor(for tab: MainTab) -> Color {
+        tab == selectedTab ? Color(.label) : Color(.systemGray)
+    }
+}
+
+private struct SectionPassesPieChart: View {
+    let section: WordSection
+    let progressState: SectionProgressStore.ProgressState
+
+    private var completionRate: Double {
+        guard section.targetPasses > 0 else { return 0 }
+        return Double(progressState.completedPasses) / Double(section.targetPasses)
+    }
+
+    var body: some View {
+        VStack(spacing: 20) {
+            // Title
+            Text(section.title)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundColor(.primary)
+
+            // Pie chart
+            ZStack {
+                // Background circle
+                Circle()
+                    .stroke(Color(.systemGray5), lineWidth: 20)
+                    .frame(width: 160, height: 160)
+
+                // Progress arc
+                Circle()
+                    .trim(from: 0, to: completionRate)
+                    .stroke(appTealColor, style: StrokeStyle(lineWidth: 20, lineCap: .round))
+                    .frame(width: 160, height: 160)
+                    .rotationEffect(.degrees(-90))
+                    .animation(.easeInOut(duration: 0.5), value: completionRate)
+
+                // Center text
+                VStack(spacing: 4) {
+                    Text("\(progressState.completedPasses)")
+                        .font(.system(size: 42, weight: .bold))
+                        .foregroundColor(appTealColor)
+                    Text("/ \(section.targetPasses) 遍")
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            // Stats
+            HStack(spacing: 30) {
+                VStack(spacing: 4) {
+                    Text("已完成")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text("\(progressState.completedPasses)")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(appTealColor)
+                }
+
+                VStack(spacing: 4) {
+                    Text("目标")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text("\(section.targetPasses)")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(.primary)
+                }
+
+                VStack(spacing: 4) {
+                    Text("完成度")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text(completionRate.formatted(.percent.precision(.fractionLength(0))))
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(.primary)
+                }
+            }
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .center)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color(.systemBackground))
+        )
+        .shadow(color: .black.opacity(0.08), radius: 16, x: 0, y: 10)
+    }
+}
+
+private struct SectionPickerView: View {
+    @Binding var selectedSection: WordSection?
+    let sections: [WordSection]
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                ForEach(sections) { section in
+                    Button {
+                        Haptic.trigger(.light)
+                        selectedSection = section
+                    } label: {
+                        Text(section.title)
+                            .font(.system(size: 15, weight: selectedSection?.id == section.id ? .semibold : .regular))
+                            .foregroundColor(selectedSection?.id == section.id ? .white : .primary)
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 10)
+                            .background(
+                                RoundedRectangle(cornerRadius: 20)
+                                    .fill(selectedSection?.id == section.id ? appTealColor : Color(.systemGray6))
+                            )
+                    }
+                }
+            }
+            .padding(.horizontal, 24)
+        }
+    }
+}
+
+private struct MonthlyProgressChart: View {
+    let data: [(day: Int, words: Int)]
+    let year: Int
+    let month: Int
+    let onPreviousMonth: () -> Void
+    let onNextMonth: () -> Void
+
+    private let maxDataPoints = 31
+    private var maxWords: Int {
+        max(data.map(\.words).max() ?? 10, 10)
+    }
+
+    var body: some View {
+        VStack(spacing: 16) {
+            // Month selector
+            HStack {
+                Button(action: onPreviousMonth) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.primary)
+                        .frame(width: 32, height: 32)
+                        .background(Circle().fill(Color(.systemGray5)))
+                }
+
+                Spacer()
+
+                Text("\(year)年\(month)月")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundColor(.primary)
+
+                Spacer()
+
+                Button(action: onNextMonth) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.primary)
+                        .frame(width: 32, height: 32)
+                        .background(Circle().fill(Color(.systemGray5)))
+                }
+            }
+
+            // Chart
+            VStack(spacing: 8) {
+                GeometryReader { geometry in
+                    let chartHeight = geometry.size.height - 30
+                    let chartWidth = geometry.size.width
+                    let spacing = chartWidth / CGFloat(max(data.count, 1))
+
+                    ZStack(alignment: .bottom) {
+                        // Grid lines
+                        ForEach(0..<5) { i in
+                            let y = chartHeight * CGFloat(i) / 4
+                            Path { path in
+                                path.move(to: CGPoint(x: 0, y: y))
+                                path.addLine(to: CGPoint(x: chartWidth, y: y))
+                            }
+                            .stroke(Color(.systemGray5), lineWidth: 1)
+                        }
+
+                        // Line chart
+                        Path { path in
+                            for (index, point) in data.enumerated() {
+                                let x = spacing * CGFloat(index) + spacing / 2
+                                let normalizedValue = CGFloat(point.words) / CGFloat(maxWords)
+                                let y = chartHeight * (1 - normalizedValue)
+
+                                if index == 0 {
+                                    path.move(to: CGPoint(x: x, y: y))
+                                } else {
+                                    path.addLine(to: CGPoint(x: x, y: y))
+                                }
+                            }
+                        }
+                        .stroke(appTealColor, style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
+
+                        // Data points
+                        ForEach(Array(data.enumerated()), id: \.offset) { index, point in
+                            let x = spacing * CGFloat(index) + spacing / 2
+                            let normalizedValue = CGFloat(point.words) / CGFloat(maxWords)
+                            let y = chartHeight * (1 - normalizedValue)
+
+                            Circle()
+                                .fill(point.words > 0 ? appTealColor : Color.clear)
+                                .frame(width: point.words > 0 ? 6 : 0, height: point.words > 0 ? 6 : 0)
+                                .position(x: x, y: y)
+                        }
+                    }
+                }
+                .frame(height: 200)
+
+                // X-axis labels
+                HStack(spacing: 0) {
+                    ForEach([1, 7, 14, 21, 28], id: \.self) { day in
+                        Text("\(day)")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+            }
+
+            // Stats
+            HStack(spacing: 20) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("本月累计")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text("\(data.reduce(0) { $0 + $1.words })")
+                        .font(.system(size: 24, weight: .bold))
+                        .foregroundColor(appTealColor)
+                }
+
+                Spacer()
+
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text("日均学习")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    let average = data.isEmpty ? 0 : data.reduce(0) { $0 + $1.words } / data.count
+                    Text("\(average)")
+                        .font(.system(size: 24, weight: .bold))
+                        .foregroundColor(.primary)
+                }
+            }
+        }
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color(.systemBackground))
+        )
+        .shadow(color: .black.opacity(0.08), radius: 16, x: 0, y: 10)
+    }
+}
+
+private struct ProgressOverviewView: View {
+    @ObservedObject var bookStore: WordBookStore
+    @ObservedObject var progressStore: SectionProgressStore
+    @ObservedObject var dailyProgressStore: DailyProgressStore
+
+    @State private var selectedYear: Int = Calendar.current.component(.year, from: Date())
+    @State private var selectedMonth: Int = Calendar.current.component(.month, from: Date())
+    @State private var selectedSection: WordSection?
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                HStack(spacing: 10) {
+                    ChartPresentationIconShape()
+                        .stroke(appTealColor, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+                        .frame(width: 28, height: 28)
+
+                    Text("单词进度")
+                        .font(.title2.weight(.semibold))
+                }
+                .padding(.horizontal, 24)
+
+                // Monthly progress chart
+                MonthlyProgressChart(
+                    data: dailyProgressStore.monthlyData(year: selectedYear, month: selectedMonth),
+                    year: selectedYear,
+                    month: selectedMonth,
+                    onPreviousMonth: {
+                        Haptic.trigger(.light)
+                        moveToMonth(offset: -1)
+                    },
+                    onNextMonth: {
+                        Haptic.trigger(.light)
+                        moveToMonth(offset: 1)
+                    }
+                )
+                .padding(.horizontal, 24)
+
+                // Section selector
+                if !bookStore.sections.isEmpty {
+                    VStack(alignment: .leading, spacing: 16) {
+                        HStack(spacing: 10) {
+                            CustomPieIcon()
+                                .frame(width: 28, height: 28)
+                                .foregroundStyle(appTealColor)
+
+                            Text("词书进度")
+                                .font(.title2.weight(.semibold))
+                        }
+                        .padding(.horizontal, 24)
+                        SectionPickerView(
+                            selectedSection: $selectedSection,
+                            sections: bookStore.sections
+                        )
+
+                        // Pie chart
+                        if let section = selectedSection {
+                            SectionPassesPieChart(
+                                section: section,
+                                progressState: progressStore.progress(for: section.id)
+                            )
+                            .padding(.horizontal, 24)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .padding(.top, 28)
+            .padding(.bottom, 140)
+        }
+        .background(Color(.systemGray6))
+        .onAppear {
+            if selectedSection == nil, let firstSection = bookStore.sections.first {
+                selectedSection = firstSection
+            }
+        }
+    }
+
+    private func moveToMonth(offset: Int) {
+        let calendar = Calendar.current
+        guard let currentDate = calendar.date(from: DateComponents(year: selectedYear, month: selectedMonth)),
+              let newDate = calendar.date(byAdding: .month, value: offset, to: currentDate) else {
+            return
+        }
+        selectedYear = calendar.component(.year, from: newDate)
+        selectedMonth = calendar.component(.month, from: newDate)
+    }
+
+    private var totalWords: Int {
+        bookStore.sections.reduce(0) { $0 + $1.words.count }
+    }
+
+    private var studiedWordsTotal: Int {
+        bookStore.sections.reduce(0) { partialResult, section in
+            partialResult + studiedWordCount(for: section, progressStore: progressStore)
+        }
+    }
+
+    private var completedPassesTotal: Int {
+        bookStore.sections.reduce(0) { partial, section in
+            partial + progressStore.completedPasses(for: section.id)
+        }
+    }
+
+    private var targetPassesTotal: Int {
+        bookStore.sections.reduce(0) { partial, section in
+            partial + max(section.targetPasses, 1)
+        }
+    }
+
+    private var completionRate: Double {
+        guard totalWords > 0 else { return 0 }
+        return Double(studiedWordsTotal) / Double(totalWords)
+    }
+
+    private var summaryCard: some View {
+        RoundedRectangle(cornerRadius: 24, style: .continuous)
+            .fill(Color(.systemBackground))
+            .overlay(
+                VStack(alignment: .leading, spacing: 20) {
+                    Text("今日学习摘要")
+                        .font(.headline)
+
+                    HStack(spacing: 16) {
+                        SummaryStat(
+                            title: "\(studiedWordsTotal)",
+                            subtitle: "已掌握词汇"
+                        )
+                        SummaryStat(
+                            title: "\(completedPassesTotal)/\(max(targetPassesTotal, 1))",
+                            subtitle: "完成遍数"
+                        )
+                        SummaryStat(
+                            title: "\(bookStore.sections.count)",
+                            subtitle: "词书数量"
+                        )
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("总体完成度 \(completionRate.formatted(.percent.precision(.fractionLength(0))))")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        ProgressView(value: completionRate, total: 1)
+                            .tint(appTealColor)
+                    }
+                }
+                .padding(22)
+            )
+            .shadow(color: .black.opacity(0.08), radius: 16, x: 0, y: 10)
+    }
+
+    private var emptyPlaceholder: some View {
+        RoundedRectangle(cornerRadius: 24, style: .continuous)
+            .fill(Color(.systemBackground))
+            .overlay(
+                VStack(spacing: 12) {
+                    Image(systemName: "chart.bar.doc.horizontal")
+                        .font(.system(size: 36, weight: .regular))
+                        .foregroundStyle(Color.accentColor)
+                    Text("暂无统计数据")
+                        .font(.headline)
+                    Text("在主页添加词书后即可查看复习进度。")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .multilineTextAlignment(.center)
+                .padding(28)
+            )
+            .shadow(color: .black.opacity(0.08), radius: 16, x: 0, y: 10)
+    }
+}
+
+private struct SummaryStat: View {
+    let title: String
+    let subtitle: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.title3.weight(.semibold))
+            Text(subtitle)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct ProgressSectionRow: View {
+    let section: WordSection
+    let studiedWords: Int
+    let progressState: SectionProgressStore.ProgressState
+
+    private var completionRatio: Double {
+        guard section.words.count > 0 else { return 0 }
+        return Double(studiedWords) / Double(section.words.count)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text(section.title)
+                    .font(.headline)
+                Spacer()
+                Text(completionRatio.formatted(.percent.precision(.fractionLength(0))))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color.accentColor)
+            }
+
+            ProgressView(value: completionRatio, total: 1)
+                .tint(Color.accentColor)
+
+            HStack(spacing: 12) {
+                Label("\(studiedWords)/\(section.words.count) 词", systemImage: "book")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Label("\(progressState.completedPasses)/\(section.targetPasses)", systemImage: "repeat")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(18)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color(.systemBackground))
+        )
+        .shadow(color: .black.opacity(0.08), radius: 12, x: 0, y: 8)
+    }
+}
+
+private struct ProfileCenterView: View {
+    @ObservedObject var userProfile: UserProfileStore
+
+    @State private var showingEmojiPicker = false
+    @State private var showingNameEditor = false
+    @State private var editingName = ""
+
+    private let emojiOptions = ["🎓", "📚", "✏️", "📖", "🌟", "💡", "🚀", "🎯", "🏆", "💪", "🔥", "⚡️", "🌈", "🎨", "🎭", "🎪"]
+
+    var body: some View {
+        GeometryReader { geometry in
+            ScrollView {
+                VStack(spacing: 0) {
+                    // Profile section centered
+                    VStack(spacing: 24) {
+                        // Avatar
+                        Button {
+                            Haptic.trigger(.light)
+                            showingEmojiPicker = true
+                        } label: {
+                            Text(userProfile.avatarEmoji)
+                                .font(.system(size: 80))
+                                .frame(width: 140, height: 140)
+                                .background(
+                                    Circle()
+                                        .fill(Color(.systemGray6))
+                                )
+                        }
+
+                        // Name
+                        Button {
+                            Haptic.trigger(.light)
+                            editingName = userProfile.userName
+                            showingNameEditor = true
+                        } label: {
+                            Text(userProfile.userName)
+                                .font(.system(size: 28, weight: .semibold))
+                                .foregroundColor(.primary)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, geometry.size.height * 0.2)
+                }
+                .frame(minHeight: geometry.size.height)
+            }
+        }
+        .background(Color(.systemGray6))
+        .sheet(isPresented: $showingEmojiPicker) {
+            EmojiPickerView(
+                selectedEmoji: $userProfile.avatarEmoji,
+                emojis: emojiOptions,
+                isPresented: $showingEmojiPicker
+            )
+            .presentationDetents([.height(300)])
+        }
+        .sheet(isPresented: $showingNameEditor) {
+            NameEditorView(
+                name: $editingName,
+                isPresented: $showingNameEditor,
+                onSave: {
+                    userProfile.userName = editingName
+                }
+            )
+            .presentationDetents([.height(200)])
+        }
+    }
+}
+
+private struct EmojiPickerView: View {
+    @Binding var selectedEmoji: String
+    let emojis: [String]
+    @Binding var isPresented: Bool
+
+    var body: some View {
+        VStack(spacing: 20) {
+            Text("选择头像")
+                .font(.headline)
+                .padding(.top, 20)
+
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: 4), spacing: 16) {
+                ForEach(emojis, id: \.self) { emoji in
+                    Button {
+                        Haptic.trigger(.medium)
+                        selectedEmoji = emoji
+                        isPresented = false
+                    } label: {
+                        Text(emoji)
+                            .font(.system(size: 50))
+                            .frame(width: 70, height: 70)
+                            .background(
+                                Circle()
+                                    .fill(emoji == selectedEmoji ? appTealColor.opacity(0.2) : Color(.systemGray6))
+                            )
+                    }
+                }
+            }
+            .padding(.horizontal, 24)
+
+            Spacer()
+        }
+        .background(Color(.systemBackground))
+    }
+}
+
+private struct NameEditorView: View {
+    @Binding var name: String
+    @Binding var isPresented: Bool
+    let onSave: () -> Void
+
+    var body: some View {
+        VStack(spacing: 20) {
+            Text("编辑名字")
+                .font(.headline)
+                .padding(.top, 20)
+
+            TextField("输入名字", text: $name)
+                .font(.system(size: 18))
+                .padding(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color(.systemGray6))
+                )
+                .padding(.horizontal, 24)
+
+            Button {
+                Haptic.trigger(.medium)
+                onSave()
+                isPresented = false
+            } label: {
+                Text("保存")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(appTealColor)
+                    )
+            }
+            .padding(.horizontal, 24)
+
+            Spacer()
+        }
+        .background(Color(.systemBackground))
+    }
+}
+
+private struct ProfileActionButton: View {
+    enum Style {
+        case accent
+        case plain
+        case destructive
+
+        var background: Color {
+            switch self {
+            case .accent: return Color.accentColor.opacity(0.12)
+            case .plain: return Color(.systemGray6)
+            case .destructive: return Color.red.opacity(0.12)
+            }
+        }
+
+        var foreground: Color {
+            switch self {
+            case .accent: return Color.accentColor
+            case .plain: return Color.primary
+            case .destructive: return Color.red
+            }
+        }
+    }
+
+    let title: String
+    let subtitle: String
+    let systemImage: String?
+    let style: Style
+    let customIcon: AnyView?
+    let action: () -> Void
+
+    init(
+        title: String,
+        subtitle: String,
+        systemImage: String? = nil,
+        style: Style,
+        customIcon: AnyView? = nil,
+        action: @escaping () -> Void
+    ) {
+        self.title = title
+        self.subtitle = subtitle
+        self.systemImage = systemImage
+        self.style = style
+        self.customIcon = customIcon
+        self.action = action
+    }
+
+    var body: some View {
+        Button {
+            triggerHaptic()
+            action()
+        } label: {
+            HStack(spacing: 16) {
+                iconView
+                    .frame(width: 44, height: 44)
+                    .background(Circle().fill(style.background))
+                    .foregroundStyle(style.foreground)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.headline)
+                    Text(subtitle)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding()
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Color(.systemBackground))
+            )
+            .shadow(color: .black.opacity(0.04), radius: 6, x: 0, y: 4)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func triggerHaptic() {
+        switch style {
+        case .accent:
+            Haptic.trigger(.medium)
+        case .plain:
+            Haptic.trigger(.light)
+        case .destructive:
+            Haptic.trigger(.heavy)
+        }
+    }
+}
+
+private extension ProfileActionButton {
+    @ViewBuilder
+    var iconView: some View {
+        if let customIcon {
+            customIcon
+        } else if let systemImage {
+            Image(systemName: systemImage)
+                .font(.system(size: 20, weight: .semibold))
+        } else {
+            EmptyView()
+        }
+    }
+}
+
+private struct AddWordBookIcon: View {
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(appTealColor)
+
+            Image(systemName: "plus")
+                .font(.system(size: 12, weight: .thin))
+                .foregroundColor(.white)
+        }
+        .aspectRatio(1, contentMode: .fit)
+    }
+}
+
+private struct ImportWordsIcon: View {
+    var body: some View {
+        ImportWordsShape()
+            .stroke(style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+            .aspectRatio(1, contentMode: .fit)
+    }
+}
+
+private struct ImportWordsShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let scale = min(rect.width, rect.height) / 24.0
+        let offsetX = rect.midX - 12.0 * scale
+        let offsetY = rect.midY - 12.0 * scale
+
+        func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+            CGPoint(x: offsetX + x * scale, y: offsetY + y * scale)
+        }
+
+        var path = Path()
+        path.move(to: point(3.75, 13.5))
+        path.addLine(to: point(14.25, 2.25))
+        path.addLine(to: point(12.0, 10.5))
+        path.addLine(to: point(20.25, 10.5))
+        path.addLine(to: point(9.75, 21.75))
+        path.addLine(to: point(12.0, 13.5))
+        path.addLine(to: point(3.75, 13.5))
+        path.closeSubpath()
+        return path
+    }
+}
+
+private struct TrashIcon: View {
+    var body: some View {
+        TrashShape()
+            .stroke(style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+            .aspectRatio(1, contentMode: .fit)
+    }
+}
+
+private struct TrashShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let scale = min(rect.width, rect.height) / 24.0
+        let offsetX = rect.midX - 12.0 * scale
+        let offsetY = rect.midY - 12.0 * scale
+
+        func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+            CGPoint(x: offsetX + x * scale, y: offsetY + y * scale)
+        }
+
+        var path = Path()
+
+        // Inner can lines
+        path.move(to: point(14.74, 9.0))
+        path.addLine(to: point(14.394, 18.0))
+        path.move(to: point(9.606, 18.0))
+        path.addLine(to: point(9.26, 9.0))
+
+        // Outer body
+        path.move(to: point(19.228, 5.79))
+        path.addLine(to: point(18.16, 19.673))
+        path.addQuadCurve(to: point(15.916, 21.75), control: point(18.0, 21.6))
+        path.addLine(to: point(8.084, 21.75))
+        path.addQuadCurve(to: point(5.84, 19.673), control: point(6.0, 21.6))
+        path.addLine(to: point(4.772, 5.79))
+        path.addQuadCurve(to: point(8.25, 5.393), control: point(6.4, 5.5))
+        path.addLine(to: point(8.25, 4.477))
+        path.addQuadCurve(to: point(10.34, 2.276), control: point(8.3, 3.2))
+        path.addLine(to: point(13.66, 2.276))
+        path.addQuadCurve(to: point(15.75, 4.477), control: point(15.7, 3.2))
+        path.addLine(to: point(15.75, 5.393))
+        path.addQuadCurve(to: point(19.228, 5.79), control: point(17.6, 5.5))
+        path.closeSubpath()
+
+        return path
+    }
+}
+
+private struct EditIconShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let scale = min(rect.width, rect.height) / 24.0
+        let offsetX = rect.midX - 12.0 * scale
+        let offsetY = rect.midY - 12.0 * scale
+
+        func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+            CGPoint(x: offsetX + x * scale, y: offsetY + y * scale)
+        }
+
+        var path = Path()
+
+        // Pencil stroke
+        path.move(to: point(16.862, 4.487))
+        path.addLine(to: point(18.549, 2.799))
+        path.addArc(center: point(19.875, 4.125), radius: 1.875 * scale, startAngle: .degrees(225), endAngle: .degrees(45), clockwise: false)
+        path.addLine(to: point(10.582, 16.07))
+        path.addLine(to: point(8.685, 17.2))
+        path.addLine(to: point(6, 18))
+        path.addLine(to: point(6.8, 15.315))
+        path.addLine(to: point(7.93, 13.418))
+        path.addLine(to: point(16.862, 4.487))
+
+        // Pencil to square connector
+        path.move(to: point(16.862, 4.487))
+        path.addLine(to: point(19.5, 7.125))
+
+        // Document outline
+        path.move(to: point(18, 14))
+        path.addLine(to: point(18, 18.75))
+        path.addArc(center: point(15.75, 18.75), radius: 2.25 * scale, startAngle: .degrees(0), endAngle: .degrees(90), clockwise: false)
+        path.addLine(to: point(5.25, 21))
+        path.addArc(center: point(5.25, 18.75), radius: 2.25 * scale, startAngle: .degrees(90), endAngle: .degrees(180), clockwise: false)
+        path.addLine(to: point(3, 8.25))
+        path.addArc(center: point(5.25, 8.25), radius: 2.25 * scale, startAngle: .degrees(180), endAngle: .degrees(270), clockwise: false)
+        path.addLine(to: point(10, 6))
+
+        return path
+    }
+}
+
+private struct ChartPresentationIconShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let scale = min(rect.width, rect.height) / 24.0
+        let offsetX = rect.midX - 12.0 * scale
+        let offsetY = rect.midY - 12.0 * scale
+
+        func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+            CGPoint(x: offsetX + x * scale, y: offsetY + y * scale)
+        }
+
+        var path = Path()
+
+        // Top monitor frame
+        path.move(to: point(3.75, 3))
+        path.addLine(to: point(3.75, 14.25))
+        path.addArc(center: point(6, 14.25), radius: 2.25 * scale, startAngle: .degrees(180), endAngle: .degrees(90), clockwise: true)
+        path.addLine(to: point(8.25, 16.5))
+
+        path.move(to: point(3.75, 3))
+        path.addLine(to: point(2.25, 3))
+
+        path.move(to: point(3.75, 3))
+        path.addLine(to: point(20.25, 3))
+
+        path.move(to: point(20.25, 3))
+        path.addLine(to: point(21.75, 3))
+
+        path.move(to: point(20.25, 3))
+        path.addLine(to: point(20.25, 14.25))
+        path.addArc(center: point(18, 14.25), radius: 2.25 * scale, startAngle: .degrees(0), endAngle: .degrees(90), clockwise: false)
+        path.addLine(to: point(15.75, 16.5))
+
+        // Bottom stand
+        path.move(to: point(8.25, 16.5))
+        path.addLine(to: point(15.75, 16.5))
+
+        path.move(to: point(8.25, 16.5))
+        path.addLine(to: point(7.25, 19.5))
+
+        path.move(to: point(15.75, 16.5))
+        path.addLine(to: point(16.75, 19.5))
+
+        path.move(to: point(16.75, 19.5))
+        path.addLine(to: point(17.25, 21))
+
+        path.move(to: point(16.75, 19.5))
+        path.addLine(to: point(7.25, 19.5))
+
+        path.move(to: point(7.25, 19.5))
+        path.addLine(to: point(6.75, 21))
+
+        // Chart line inside
+        path.move(to: point(9.75, 12))
+        path.addLine(to: point(12.75, 9))
+        path.addLine(to: point(14.898, 11.148))
+        // Curve approximation
+        let control1 = point(15.3, 10.5)
+        let control2 = point(15.8, 10.0)
+        path.addCurve(to: point(16.5, 7.605), control1: control1, control2: control2)
+
+        return path
+    }
+}
+
+private struct CustomPieIcon: View {
+    var lineWidth: CGFloat = 1.5
+
+    var body: some View {
+        ZStack {
+            CustomPieLargeSlice()
+                .stroke(style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round))
+            CustomPieSmallSlice()
+                .stroke(style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round))
+        }
+        .aspectRatio(1, contentMode: .fit)
+    }
+}
+
+private struct CustomPieLargeSlice: Shape {
+    func path(in rect: CGRect) -> Path {
+        let scale = min(rect.width, rect.height) / 24.0
+        let offsetX = rect.midX - 12.0 * scale
+        let offsetY = rect.midY - 12.0 * scale
+
+        func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+            CGPoint(x: offsetX + x * scale, y: offsetY + y * scale)
+        }
+
+        var path = Path()
+
+        // M2.25 13.5
+        path.move(to: point(2.25, 13.5))
+
+        // a8.25 8.25 0 0 1 8.25-8.25
+        path.addArc(
+            center: point(10.5, 13.5),
+            radius: 8.25 * scale,
+            startAngle: .degrees(180),
+            endAngle: .degrees(270),
+            clockwise: false
+        )
+
+        // .75.75 0 0 1 .75.75
+        path.addArc(
+            center: point(10.5, 6),
+            radius: 0.75 * scale,
+            startAngle: .degrees(180),
+            endAngle: .degrees(90),
+            clockwise: false
+        )
+
+        // v6.75
+        path.addLine(to: point(11.25, 12.75))
+
+        // H18
+        path.addLine(to: point(18, 12.75))
+
+        // a.75.75 0 0 1 .75.75
+        path.addArc(
+            center: point(18, 13.5),
+            radius: 0.75 * scale,
+            startAngle: .degrees(270),
+            endAngle: .degrees(0),
+            clockwise: false
+        )
+
+        // a8.25 8.25 0 0 1-16.5 0
+        path.addArc(
+            center: point(10.5, 13.5),
+            radius: 8.25 * scale,
+            startAngle: .degrees(0),
+            endAngle: .degrees(180),
+            clockwise: false
+        )
+
+        path.closeSubpath()
+        return path
+    }
+}
+
+private struct CustomPieSmallSlice: Shape {
+    func path(in rect: CGRect) -> Path {
+        let scale = min(rect.width, rect.height) / 24.0
+        let offsetX = rect.midX - 12.0 * scale
+        let offsetY = rect.midY - 12.0 * scale
+
+        func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+            CGPoint(x: offsetX + x * scale, y: offsetY + y * scale)
+        }
+
+        var path = Path()
+
+        // M12.75 3
+        path.move(to: point(12.75, 3))
+
+        // a.75.75 0 0 1 .75-.75
+        path.addArc(
+            center: point(13.5, 3),
+            radius: 0.75 * scale,
+            startAngle: .degrees(180),
+            endAngle: .degrees(270),
+            clockwise: false
+        )
+
+        // a8.25 8.25 0 0 1 8.25 8.25
+        path.addArc(
+            center: point(13.5, 10.5),
+            radius: 8.25 * scale,
+            startAngle: .degrees(270),
+            endAngle: .degrees(0),
+            clockwise: false
+        )
+
+        // a.75.75 0 0 1-.75.75
+        path.addArc(
+            center: point(21, 10.5),
+            radius: 0.75 * scale,
+            startAngle: .degrees(0),
+            endAngle: .degrees(90),
+            clockwise: false
+        )
+
+        // h-7.5
+        path.addLine(to: point(13.5, 11.25))
+
+        // a.75.75 0 0 1-.75-.75
+        path.addArc(
+            center: point(12.75, 10.5),
+            radius: 0.75 * scale,
+            startAngle: .degrees(0),
+            endAngle: .degrees(270),
+            clockwise: true
+        )
+
+        // V3
+        path.addLine(to: point(12.75, 3))
+
+        path.closeSubpath()
+        return path
+    }
+}
 
 final class WordBookStore: ObservableObject {
     @Published private(set) var sections: [WordSection] = []
@@ -54,7 +1249,8 @@ final class WordBookStore: ObservableObject {
         }
 
         var needsSave = false
-        if let bundledSection = try? BundledWordBookLoader.load() {
+        let bundledSections = BundledWordBookLoader.loadAll()
+        for bundledSection in bundledSections {
             if !sections.contains(where: { $0.id == bundledSection.id || $0.title == bundledSection.title }) {
                 sections.append(bundledSection)
                 needsSave = true
@@ -84,36 +1280,23 @@ struct ContentView: View {
     @State private var editingSection: WordSection?
     @StateObject private var hideState = WordVisibilityStore()
     @StateObject private var progressStore = SectionProgressStore()
+    @StateObject private var dailyProgressStore = DailyProgressStore()
+    @StateObject private var userProfile = UserProfileStore()
     @State private var showingAutomationAgent = false
+    @State private var importingSection: WordSection?
+    @State private var selectedTab: MainTab = .home
+    @State private var isRootView: Bool = true
+    @State private var previousTab: MainTab = .home
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                LazyVStack(spacing: 24) {
-                    ForEach(bookStore.sections) { section in
-                        let studied = studiedWordCount(for: section)
-                        let progressState = progressStore.progress(for: section.id)
-                        NavigationLink(value: section.id) {
-                            SectionCardView(
-                                section: section,
-                                studiedWords: studied,
-                                completedPasses: progressState.completedPasses,
-                                onDelete: {
-                                    sectionToDelete = section
-                                },
-                                onEdit: {
-                                    editingSection = section
-                                }
-                            )
-                        }
-                        .buttonStyle(.plain)
-                    }
+            tabContent
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .background(Color(.systemGray6).ignoresSafeArea())
+                .onChange(of: selectedTab) { oldValue, _ in
+                    previousTab = oldValue
+                    isRootView = true
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 28)
-            }
-            .background(Color(.systemGray6))
-            .navigationTitle("葫芦背词")
             .navigationDestination(for: UUID.self) { id in
                 if let section = bookStore.sections.first(where: { $0.id == id }) {
                     WordSectionDetailView(
@@ -127,27 +1310,26 @@ struct ContentView: View {
                     )
                     .environmentObject(hideState)
                     .environmentObject(progressStore)
+                    .environmentObject(dailyProgressStore)
+                    .onAppear {
+                        isRootView = false
+                    }
+                    .onDisappear {
+                        isRootView = true
+                    }
                 }
             }
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button {
-                        showingAutomationAgent = true
-                    } label: {
-                        Image(systemName: "bolt.fill")
-                            .font(.title3)
-                    }
-                    .accessibilityLabel("批量导入单词")
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        showingAddSection = true
-                    } label: {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.title3)
-                    }
-                    .accessibilityLabel("添加词书")
-                }
+            .toolbar(.hidden, for: .navigationBar)
+        }
+        .safeAreaInset(edge: .bottom) {
+            if isRootView {
+                BottomTabBar(
+                    selectedTab: $selectedTab,
+                    onAddSection: { showingAddSection = true },
+                    showAddButton: true
+                )
+            } else {
+                EmptyView()
             }
         }
         .sheet(isPresented: $showingAddSection) {
@@ -169,6 +1351,16 @@ struct ContentView: View {
             .environmentObject(progressStore)
             .presentationDetents([.medium, .large])
         })
+        .sheet(item: $importingSection, content: { section in
+            QuickImportSheet(section: section) { entries in
+                let result = importWords(entries, intoSectionID: section.id)
+                if let refreshed = bookStore.sections.first(where: { $0.id == section.id }) {
+                    importingSection = refreshed
+                }
+                return result
+            }
+            .presentationDetents([.medium, .large])
+        })
         .sheet(isPresented: $showingAutomationAgent) {
             AutomationAgentSheet()
                 .environmentObject(bookStore)
@@ -181,9 +1373,11 @@ struct ContentView: View {
             }
         )) {
             Button("取消", role: .cancel) {
+                Haptic.trigger(.light)
                 sectionToDelete = nil
             }
             Button("删除", role: .destructive) {
+                Haptic.trigger(.heavy)
                 if let target = sectionToDelete {
                     hideState.remove(entries: target.words)
                     progressStore.resetProgress(for: target.id)
@@ -194,6 +1388,85 @@ struct ContentView: View {
         } message: {
             Text("删除后将无法恢复，确认删除？")
         }
+    }
+
+    private var tabContent: some View {
+        ZStack {
+            if selectedTab == .home {
+                homeView
+                    .transition(transition(for: .home))
+            }
+            if selectedTab == .progress {
+                ProgressOverviewView(bookStore: bookStore, progressStore: progressStore, dailyProgressStore: dailyProgressStore)
+                    .transition(transition(for: .progress))
+            }
+            if selectedTab == .profile {
+                ProfileCenterView(userProfile: userProfile)
+                    .transition(transition(for: .profile))
+            }
+        }
+        .animation(.easeInOut(duration: 0.28), value: selectedTab)
+    }
+
+    private func transition(for tab: MainTab) -> AnyTransition {
+        let newIndex = tab.order
+        let oldIndex = previousTab.order
+
+        guard newIndex != oldIndex else {
+            return .identity
+        }
+
+        let insertionEdge: Edge = newIndex > oldIndex ? .trailing : .leading
+        let removalEdge: Edge = newIndex > oldIndex ? .leading : .trailing
+
+        return .asymmetric(
+            insertion: .move(edge: insertionEdge).combined(with: .opacity),
+            removal: .move(edge: removalEdge).combined(with: .opacity)
+        )
+    }
+
+    private var homeView: some View {
+        ScrollView {
+            VStack(spacing: 24) {
+                headerView
+
+                LazyVStack(spacing: 24) {
+                    ForEach(bookStore.sections) { section in
+                        let studied = studiedWordCount(for: section, progressStore: progressStore)
+                        let progressState = progressStore.progress(for: section.id)
+                        NavigationLink(value: section.id) {
+                            SectionCardView(
+                                section: section,
+                                studiedWords: studied,
+                                completedPasses: progressState.completedPasses,
+                                onDelete: {
+                                    sectionToDelete = section
+                                },
+                                onImport: {
+                                    importingSection = section
+                                }
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 28)
+            .padding(.bottom, 220)
+        }
+    }
+
+    private var headerView: some View {
+        HStack(spacing: 14) {
+            AppIconBadge()
+
+            Text("葫芦背词")
+                .font(.title2.weight(.semibold))
+
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func updateSection(_ section: WordSection) {
@@ -208,13 +1481,290 @@ struct ContentView: View {
         editingSection = nil
     }
 
-    private func studiedWordCount(for section: WordSection) -> Int {
-        let totalWords = section.words.count
-        guard totalWords > 0 else { return 0 }
-        let totalPages = max(1, (totalWords + wordsPerPage - 1) / wordsPerPage)
-        let completedPages = max(0, min(progressStore.completedPages(for: section.id), totalPages))
-        let estimatedWords = completedPages * wordsPerPage
-        return min(estimatedWords, totalWords)
+    private func importWords(_ entries: [WordEntry], intoSectionID id: UUID) -> QuickImportResult {
+        guard let existing = bookStore.sections.first(where: { $0.id == id }) else {
+            return QuickImportResult(addedCount: 0, duplicateWords: [])
+        }
+
+        var existingWords = Set(existing.words.map { $0.word.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() })
+        var additions: [WordEntry] = []
+        var duplicates: [String] = []
+
+        for entry in entries {
+            let trimmedWord = entry.word.trimmingCharacters(in: .whitespacesAndNewlines)
+            let trimmedMeaning = entry.meaning.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmedWord.isEmpty else { continue }
+
+            let lower = trimmedWord.lowercased()
+            if existingWords.contains(lower) {
+                duplicates.append(trimmedWord)
+                continue
+            }
+
+            additions.append(WordEntry(word: trimmedWord, meaning: trimmedMeaning.isEmpty ? "-" : trimmedMeaning))
+            existingWords.insert(lower)
+        }
+
+        guard !additions.isEmpty else {
+            return QuickImportResult(addedCount: 0, duplicateWords: duplicates)
+        }
+
+        var mergedWords = existing.words
+        mergedWords.append(contentsOf: additions)
+
+        let updatedSection = WordSection(
+            id: existing.id,
+            title: existing.title,
+            subtitle: existing.subtitle,
+            words: mergedWords,
+            targetPasses: existing.targetPasses
+        )
+
+        bookStore.updateSection(updatedSection)
+        let totalPages = max(updatedSection.words.chunked(into: wordsPerPage).count, 1)
+        progressStore.clampProgress(for: updatedSection.id, totalPages: totalPages, targetPasses: updatedSection.targetPasses)
+
+        return QuickImportResult(addedCount: additions.count, duplicateWords: duplicates)
+    }
+
+}
+
+private struct UserIconView: View {
+    var color: Color
+    var lineWidth: CGFloat
+    var isSelected: Bool
+
+    var body: some View {
+        ZStack {
+            if isSelected {
+                UserIconShape()
+                    .fill(color)
+            }
+            UserIconShape()
+                .stroke(color, lineWidth: lineWidth)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .animation(nil, value: isSelected)
+    }
+}
+
+private struct HouseIconView: View {
+    var color: Color
+    var lineWidth: CGFloat
+    var isSelected: Bool
+
+    var body: some View {
+        ZStack {
+            if isSelected {
+                HouseFillShape()
+                    .fill(color)
+                HouseDoorShape()
+                    .fill(Color(.systemBackground))
+            }
+            HouseStrokeShape()
+                .stroke(color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round))
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .animation(nil, value: isSelected)
+    }
+}
+
+private struct BarsIconView: View {
+    var color: Color
+    var lineWidth: CGFloat
+    var isSelected: Bool
+
+    var body: some View {
+        ZStack {
+            if isSelected {
+                BarsIconShape(lineWidth: lineWidth)
+                    .fill(color)
+            }
+            BarsIconShape(lineWidth: lineWidth)
+                .stroke(color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round))
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .animation(nil, value: isSelected)
+    }
+}
+
+private struct UserIconShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let minSide = min(rect.width, rect.height)
+        let scale = minSide / 24.0
+        let offsetX = (rect.width - 24 * scale) / 2
+        let offsetY = (rect.height - 24 * scale) / 2
+
+        let headCenter = CGPoint(x: offsetX + 12 * scale, y: offsetY + 6 * scale)
+        let headRadius = 3.75 * scale
+
+        let bodyStart = CGPoint(x: offsetX + 4.501 * scale, y: offsetY + 20.118 * scale)
+        let bodyCenter = CGPoint(x: offsetX + 12 * scale, y: offsetY + 20.118 * scale)
+        let bodyRadius = 7.5 * scale
+        let bottomControl = CGPoint(x: offsetX + 12 * scale, y: offsetY + 21.75 * scale)
+
+        var path = Path()
+        let headRect = CGRect(x: headCenter.x - headRadius, y: headCenter.y - headRadius, width: headRadius * 2, height: headRadius * 2)
+        path.addEllipse(in: headRect)
+
+        var torso = Path()
+        torso.move(to: bodyStart)
+        torso.addArc(center: bodyCenter, radius: bodyRadius, startAngle: .degrees(180), endAngle: .degrees(0), clockwise: false)
+        torso.addQuadCurve(to: bodyStart, control: bottomControl)
+        torso.closeSubpath()
+        path.addPath(torso)
+
+        return path
+    }
+}
+
+private struct HouseStrokeShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let minSide = min(rect.width, rect.height)
+        let scale = minSide / 24.0
+        let offsetX = (rect.width - 24 * scale) / 2
+        let offsetY = (rect.height - 24 * scale) / 2
+
+        func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+            CGPoint(x: offsetX + x * scale, y: offsetY + y * scale)
+        }
+
+        var path = Path()
+        path.move(to: point(2.25, 12))
+        path.addLine(to: point(12, 3))
+        path.addLine(to: point(21.75, 12))
+
+        path.move(to: point(4.5, 11))
+        path.addLine(to: point(4.5, 20))
+        path.addCurve(to: point(5.625, 21.125), control1: point(4.5, 20.621), control2: point(5.004, 21.125))
+        path.addLine(to: point(9.75, 21.125))
+        path.addLine(to: point(9.75, 16.25))
+        path.addCurve(to: point(10.875, 15.125), control1: point(9.75, 15.629), control2: point(10.254, 15.125))
+        path.addLine(to: point(13.125, 15.125))
+        path.addCurve(to: point(14.25, 16.25), control1: point(13.746, 15.125), control2: point(14.25, 15.629))
+        path.addLine(to: point(14.25, 21.125))
+        path.addLine(to: point(18.375, 21.125))
+        path.addCurve(to: point(19.5, 20), control1: point(18.996, 21.125), control2: point(19.5, 20.621))
+        path.addLine(to: point(19.5, 11))
+
+        path.move(to: point(8.25, 21))
+        path.addLine(to: point(16.5, 21))
+
+        return path
+    }
+}
+
+private struct HouseFillShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let minSide = min(rect.width, rect.height)
+        let scale = minSide / 24.0
+        let offsetX = (rect.width - 24 * scale) / 2
+        let offsetY = (rect.height - 24 * scale) / 2
+
+        func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+            CGPoint(x: offsetX + x * scale, y: offsetY + y * scale)
+        }
+
+        var path = Path()
+        path.move(to: point(2.25, 12))
+        path.addLine(to: point(12, 3))
+        path.addLine(to: point(21.75, 12))
+        path.closeSubpath()
+
+        let bodyRect = CGRect(
+            x: offsetX + 4.5 * scale,
+            y: offsetY + 11 * scale,
+            width: 15 * scale,
+            height: 10.75 * scale
+        )
+        path.addRect(bodyRect)
+
+        return path
+    }
+}
+
+private struct HouseDoorShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let minSide = min(rect.width, rect.height)
+        let scale = minSide / 24.0
+        let offsetX = (rect.width - 24 * scale) / 2
+        let offsetY = (rect.height - 24 * scale) / 2
+
+        let doorRect = CGRect(
+            x: offsetX + 9.75 * scale,
+            y: offsetY + 15.125 * scale,
+            width: 4.5 * scale,
+            height: 5.875 * scale
+        )
+        return Path(roundedRect: doorRect, cornerRadius: 1.2 * scale)
+    }
+}
+
+private struct BarsIconShape: Shape {
+    var lineWidth: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        let minSide = min(rect.width, rect.height)
+        let scale = minSide / 24.0
+        let offsetX = (rect.width - 24 * scale) / 2
+        let offsetY = (rect.height - 24 * scale) / 2
+
+        func scaledRect(_ x: CGFloat, _ y: CGFloat, _ width: CGFloat, _ height: CGFloat) -> CGRect {
+            CGRect(x: offsetX + x * scale,
+                   y: offsetY + y * scale,
+                   width: width * scale,
+                   height: height * scale)
+        }
+
+        let corner = max(lineWidth * 1.2, 1.5 * scale)
+
+        var path = Path()
+        path.addPath(Path(roundedRect: scaledRect(3.0, 12.0, 3.0, 9.0), cornerRadius: corner))
+        path.addPath(Path(roundedRect: scaledRect(9.75, 7.5, 3.0, 13.5), cornerRadius: corner))
+        path.addPath(Path(roundedRect: scaledRect(16.5, 3.0, 3.0, 18.0), cornerRadius: corner))
+
+        return path
+    }
+}
+
+private struct AppIconBadge: View {
+    private let size: CGFloat = 48
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
+
+        Group {
+            if let icon = UIImage.appIcon {
+                Image(uiImage: icon)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Image(systemName: "character.book.closed.fill")
+                    .resizable()
+                    .scaledToFit()
+                    .padding(10)
+                    .foregroundStyle(Color.accentColor)
+            }
+        }
+        .frame(width: size, height: size)
+        .background(shape.fill(Color(.systemBackground)))
+        .clipShape(shape)
+        .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
+    }
+}
+
+private extension UIImage {
+    static var appIcon: UIImage? {
+        guard
+            let icons = Bundle.main.infoDictionary?["CFBundleIcons"] as? [String: Any],
+            let primary = icons["CFBundlePrimaryIcon"] as? [String: Any],
+            let iconFiles = primary["CFBundleIconFiles"] as? [String],
+            let iconName = iconFiles.last,
+            let icon = UIImage(named: iconName)
+        else {
+            return nil
+        }
+        return icon
     }
 }
 
@@ -223,7 +1773,7 @@ private struct SectionCardView: View {
     let studiedWords: Int
     let completedPasses: Int
     let onDelete: () -> Void
-    let onEdit: () -> Void
+    let onImport: () -> Void
 
     private var normalizedPassCount: Int {
         let target = max(section.targetPasses, 1)
@@ -232,20 +1782,24 @@ private struct SectionCardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(section.title)
-                    .font(.title3)
-                    .fontWeight(.semibold)
-                if let subtitle = section.subtitle {
-                    Text(subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(section.title)
+                        .font(.title3)
+                        .fontWeight(.semibold)
+                    if let subtitle = section.subtitle {
+                        Text(subtitle)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    if section.targetPasses > 1 {
+                        Text("目标遍数 ×\(section.targetPasses)")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                 }
-                if section.targetPasses > 1 {
-                    Text("目标遍数 ×\(section.targetPasses)")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
+
+                Spacer(minLength: 12)
             }
 
             HStack(spacing: 12) {
@@ -257,25 +1811,27 @@ private struct SectionCardView: View {
                     .foregroundStyle(.secondary)
                 Spacer()
                 Button {
-                    onEdit()
+                    Haptic.trigger(.light)
+                    onImport()
                 } label: {
-                    Image(systemName: "pencil")
-                        .font(.caption)
+                    ImportWordsIcon()
+                        .frame(width: 16, height: 16)
                         .padding(6)
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(Color.blue)
+                .foregroundStyle(Color.accentColor)
                 .background(
                     Circle()
-                        .fill(Color.blue.opacity(0.12))
+                        .fill(Color.accentColor.opacity(0.12))
                 )
-                .accessibilityLabel("编辑词书")
+                .accessibilityLabel("导入单词")
 
                 Button {
+                    Haptic.trigger(.heavy)
                     onDelete()
                 } label: {
-                    Image(systemName: "trash")
-                        .font(.caption)
+                    TrashIcon()
+                        .frame(width: 16, height: 16)
                         .padding(6)
                 }
                 .buttonStyle(.plain)
@@ -320,6 +1876,7 @@ private struct WordRowView: View {
                         .fill(Color.clear)
                         .contentShape(Rectangle())
                         .onTapGesture {
+                            Haptic.trigger(.light)
                             withAnimation(.easeInOut(duration: 0.25)) {
                                 hideState.toggleWord(id: entry.id)
                             }
@@ -339,6 +1896,7 @@ private struct WordRowView: View {
                         .fill(Color.clear)
                         .contentShape(Rectangle())
                         .onTapGesture {
+                            Haptic.trigger(.light)
                             withAnimation(.easeInOut(duration: 0.25)) {
                                 hideState.toggleMeaning(id: entry.id)
                             }
@@ -357,6 +1915,8 @@ private struct WordSectionDetailView: View {
 
     @EnvironmentObject private var hideState: WordVisibilityStore
     @EnvironmentObject private var progressStore: SectionProgressStore
+    @EnvironmentObject private var dailyProgressStore: DailyProgressStore
+
     init(section: WordSection, onEdit: ((WordSection) -> Void)? = nil, onUpdateWords: @escaping (UUID, [WordEntry]) -> Void) {
         self.section = section
         self.onEdit = onEdit
@@ -391,9 +1951,13 @@ private struct WordSectionDetailView: View {
             if let onEdit {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
+                        Haptic.trigger(.light)
                         onEdit(section)
                     } label: {
-                        Image(systemName: "square.and.pencil")
+                        EditIconShape()
+                            .stroke(appTealColor, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+                            .frame(width: 26, height: 26)
+                            .alignmentGuide(VerticalAlignment.center) { d in d[VerticalAlignment.center] }
                     }
                 }
             }
@@ -487,7 +2051,13 @@ private struct WordSectionDetailView: View {
     private func markCurrentPageCompleted() {
         guard pageEntries.indices.contains(currentPage) else { return }
         let total = pageEntries.count
+        let wordsOnPage = pageEntries[currentPage].count
+
         let state = progressStore.markPageCompleted(sectionID: section.id, totalPages: total, pageIndex: currentPage, targetPasses: section.targetPasses)
+
+        // Record daily progress
+        dailyProgressStore.recordWordsLearned(count: wordsOnPage)
+
         let targetPage = min(state.completedPages, max(total - 1, 0))
         if currentPage != targetPage {
             withAnimation(.easeInOut) {
@@ -613,6 +2183,7 @@ private struct GlassDial: View {
                 VStack(spacing: 12) {
                     ForEach(actions) { action in
                         Button {
+                            Haptic.trigger(.light)
                             action.handler()
                         } label: {
                             Label(action.title, systemImage: action.systemImage)
@@ -911,6 +2482,7 @@ private struct GlassDial: View {
                 activeSlot = nil
                 onActiveChange(nil)
                 if let action = action, action.isEnabled {
+                    Haptic.trigger(.light)
                     action.handler()
                 }
             }
@@ -1021,14 +2593,21 @@ private struct AddSectionSheet: View {
                             .padding(.vertical, 6)
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                 Button(role: .destructive) {
+                                    Haptic.trigger(.heavy)
                                     removeEntry(withID: entry.id)
                                 } label: {
-                                    Label("删除", systemImage: "trash")
+                                    Label {
+                                        Text("删除")
+                                    } icon: {
+                                        TrashIcon()
+                                            .frame(width: 16, height: 16)
+                                    }
                                 }
                             }
                         }
 
                         Button {
+                            Haptic.trigger(.light)
                             let newEntry = AddEntry()
                             entries.append(newEntry)
                             DispatchQueue.main.async {
@@ -1044,10 +2623,14 @@ private struct AddSectionSheet: View {
                 .navigationTitle(initialSection == nil ? "添加自定义词书" : "编辑词书")
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("取消") { dismiss() }
+                        Button("取消") {
+                            Haptic.trigger(.light)
+                            dismiss()
+                        }
                     }
                     ToolbarItem(placement: .confirmationAction) {
                         Button("保存") {
+                            Haptic.trigger(.medium)
                             saveSection()
                         }
                         .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -1057,7 +2640,9 @@ private struct AddSectionSheet: View {
                     get: { errorMessage != nil },
                     set: { _ in errorMessage = nil }
                 )) {
-                    Button("好的", role: .cancel) {}
+                    Button("好的", role: .cancel) {
+                        Haptic.trigger(.light)
+                    }
                 }
             }
         }
@@ -1114,6 +2699,160 @@ private struct AddSectionSheet: View {
                 }
             }
         )
+    }
+}
+
+private struct QuickImportResult {
+    let addedCount: Int
+    let duplicateWords: [String]
+}
+
+private struct QuickImportSheet: View {
+    let section: WordSection
+    let onImport: ([WordEntry]) -> QuickImportResult
+
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var rawInput: String = ""
+    @State private var resultMessage: String?
+    @State private var warningMessage: String?
+    @State private var isProcessing = false
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("将单词追加到“\(section.title)” 中。每一行使用 “单词|释义” 的格式，例如：\nabandon|v. 放弃")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+
+                ZStack(alignment: .topLeading) {
+                    if rawInput.isEmpty {
+                        Text("单词|释义")
+                            .foregroundStyle(Color.secondary.opacity(0.5))
+                            .padding(.top, 8)
+                            .padding(.horizontal, 6)
+                    }
+                    TextEditor(text: $rawInput)
+                        .font(.system(.body, design: .monospaced))
+                        .frame(minHeight: 200)
+                        .padding(10)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(Color.secondary.opacity(0.25))
+                        )
+                }
+
+                if let resultMessage {
+                    Label(resultMessage, systemImage: "checkmark.circle")
+                        .foregroundStyle(Color.green)
+                }
+
+                if let warningMessage {
+                    Label(warningMessage, systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(Color.orange)
+                        .multilineTextAlignment(.leading)
+                }
+
+                Spacer()
+            }
+            .padding()
+            .navigationTitle("导入单词")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") {
+                        Haptic.trigger(.light)
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button {
+                        processInput()
+                    } label: {
+                        Text(isProcessing ? "处理中…" : "导入")
+                    }
+                    .disabled(isProcessing)
+                }
+            }
+        }
+    }
+
+    private func processInput() {
+        let trimmed = rawInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            Haptic.trigger(.light)
+            resultMessage = nil
+            warningMessage = "请输入需要导入的单词。"
+            return
+        }
+
+        isProcessing = true
+        defer { isProcessing = false }
+
+        let lines = trimmed.components(separatedBy: .newlines)
+        var parsedEntries: [WordEntry] = []
+        var invalidLines: [String] = []
+
+        for rawLine in lines {
+            let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !line.isEmpty else { continue }
+
+            let components = line.components(separatedBy: "|")
+            guard components.count >= 2 else {
+                invalidLines.append(rawLine)
+                continue
+            }
+
+            let word = components[0].trimmingCharacters(in: .whitespacesAndNewlines)
+            let meaning = components.dropFirst().joined(separator: "|").trimmingCharacters(in: .whitespacesAndNewlines)
+
+            guard !word.isEmpty else {
+                invalidLines.append(rawLine)
+                continue
+            }
+
+            parsedEntries.append(WordEntry(word: word, meaning: meaning.isEmpty ? "-" : meaning))
+        }
+
+        guard !parsedEntries.isEmpty else {
+            Haptic.trigger(.light)
+            resultMessage = nil
+            warningMessage = invalidLines.isEmpty
+                ? "没有识别到有效的单词，请按照 “单词|释义” 的格式输入。"
+                : "以下行格式不正确：\(summarizedList(invalidLines))"
+            return
+        }
+
+        let result = onImport(parsedEntries)
+
+        var warnings: [String] = []
+        if !invalidLines.isEmpty {
+            warnings.append("已跳过无法识别的行：\(summarizedList(invalidLines))")
+        }
+        if !result.duplicateWords.isEmpty {
+            warnings.append("已跳过重复单词：\(summarizedList(result.duplicateWords))")
+        }
+
+        if result.addedCount > 0 {
+            Haptic.trigger(.medium)
+            resultMessage = "成功导入 \(result.addedCount) 个单词至“\(section.title)”"
+            warningMessage = warnings.isEmpty ? nil : warnings.joined(separator: "\n")
+            rawInput = ""
+        } else {
+            Haptic.trigger(.light)
+            resultMessage = nil
+            warnings.append("没有导入新的单词。")
+            warningMessage = warnings.joined(separator: "\n")
+        }
+    }
+
+    private func summarizedList(_ items: [String], limit: Int = 5) -> String {
+        guard !items.isEmpty else { return "" }
+        if items.count <= limit {
+            return items.joined(separator: "、")
+        } else {
+            let prefixItems = items.prefix(limit).joined(separator: "、")
+            return "\(prefixItems) 等共 \(items.count) 项"
+        }
     }
 }
 
@@ -1174,11 +2913,13 @@ private struct AutomationAgentSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("取消") {
+                        Haptic.trigger(.light)
                         dismiss()
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
+                        Haptic.trigger(.medium)
                         processInput()
                     } label: {
                         Text(isProcessing ? "处理中…" : "开始导入")
@@ -1462,10 +3203,104 @@ final class SectionProgressStore: ObservableObject {
         progressStates.removeValue(forKey: sectionID)
     }
 
+    func resetAllProgress() {
+        if !progressStates.isEmpty {
+            progressStates.removeAll()
+        }
+    }
+
     private func persist() {
         guard !isRestoring,
               let data = try? JSONEncoder().encode(progressStates) else { return }
         defaults.set(data, forKey: defaultsKey)
+    }
+}
+
+final class DailyProgressStore: ObservableObject {
+    struct DailyRecord: Codable {
+        let date: String  // Format: "yyyy-MM-dd"
+        var wordsLearned: Int
+    }
+
+    @Published private var records: [String: Int] = [:] {
+        didSet { persist() }
+    }
+
+    private let defaults: UserDefaults
+    private let defaultsKey = "DailyProgressStore.v1"
+    private var isRestoring = false
+
+    init(userDefaults: UserDefaults = .standard) {
+        self.defaults = userDefaults
+        if let data = userDefaults.data(forKey: defaultsKey),
+           let decoded = try? JSONDecoder().decode([String: Int].self, from: data) {
+            isRestoring = true
+            records = decoded
+            isRestoring = false
+        }
+    }
+
+    func recordWordsLearned(count: Int, date: Date = Date()) {
+        let dateString = dateFormatter.string(from: date)
+        records[dateString, default: 0] += count
+    }
+
+    func wordsLearned(on date: Date) -> Int {
+        let dateString = dateFormatter.string(from: date)
+        return records[dateString] ?? 0
+    }
+
+    func monthlyData(year: Int, month: Int) -> [(day: Int, words: Int)] {
+        let calendar = Calendar.current
+        guard let date = calendar.date(from: DateComponents(year: year, month: month, day: 1)),
+              let range = calendar.range(of: .day, in: .month, for: date) else {
+            return []
+        }
+
+        return range.map { day in
+            let dateComponents = DateComponents(year: year, month: month, day: day)
+            guard let dayDate = calendar.date(from: dateComponents) else {
+                return (day, 0)
+            }
+            return (day, wordsLearned(on: dayDate))
+        }
+    }
+
+    private var dateFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }
+
+    private func persist() {
+        guard !isRestoring,
+              let data = try? JSONEncoder().encode(records) else { return }
+        defaults.set(data, forKey: defaultsKey)
+    }
+}
+
+final class UserProfileStore: ObservableObject {
+    @Published var userName: String {
+        didSet { persist() }
+    }
+
+    @Published var avatarEmoji: String {
+        didSet { persist() }
+    }
+
+    private let defaults: UserDefaults
+    private let nameKey = "UserProfileStore.name"
+    private let emojiKey = "UserProfileStore.emoji"
+
+    init(userDefaults: UserDefaults = .standard) {
+        self.defaults = userDefaults
+        self.userName = userDefaults.string(forKey: nameKey) ?? "学习者"
+        self.avatarEmoji = userDefaults.string(forKey: emojiKey) ?? "🎓"
+    }
+
+    private func persist() {
+        defaults.set(userName, forKey: nameKey)
+        defaults.set(avatarEmoji, forKey: emojiKey)
     }
 }
 
@@ -1558,6 +3393,12 @@ final class WordVisibilityStore: ObservableObject {
         }
     }
 
+    func resetAll() {
+        if !visibility.isEmpty {
+            visibility.removeAll()
+        }
+    }
+
     fileprivate func reconcile(previous: WordSection, updated: WordSection) {
         let updatedIDs = Set(updated.words.map(\.id))
         var newVisibility = visibility
@@ -1617,17 +3458,48 @@ private enum BundledWordBookLoader {
         case noEntries
     }
 
-    private static let resourceName = "highschool3500_shuffled"
+    private struct ResourceDescriptor {
+        let fileName: String
+        let title: String
+        let sectionID: UUID
+    }
+
     private static let resourceExtension = "txt"
+    private static let descriptors: [ResourceDescriptor] = [
+        .init(
+            fileName: "highschool3500_shuffled",
+            title: "高中英语词汇3500乱序",
+            sectionID: UUID(uuidString: "095D66A2-6E17-42A3-B0FA-9022D3AD4398")!
+        ),
+        .init(
+            fileName: "4 六级-乱序",
+            title: "六级词汇乱序",
+            sectionID: UUID(uuidString: "5E6E7A45-D6A8-4A18-97F4-9FA9E773D6A2")!
+        ),
+        .init(
+            fileName: "5 考研-乱序",
+            title: "考研词汇乱序",
+            sectionID: UUID(uuidString: "12F6BBD0-8CD7-4A5B-9B3C-3EF9F2B6C3C5")!
+        ),
+        .init(
+            fileName: "6 托福-乱序",
+            title: "托福词汇乱序",
+            sectionID: UUID(uuidString: "A2E1E629-189A-4D38-BC86-1B96E989F24C")!
+        )
+    ]
 
-    private static let sectionID = UUID(uuidString: "095D66A2-6E17-42A3-B0FA-9022D3AD4398")!
+    static func loadAll() -> [WordSection] {
+        descriptors.compactMap { descriptor in
+            try? loadSection(descriptor: descriptor)
+        }
+    }
 
-    static func load() throws -> WordSection {
+    private static func loadSection(descriptor: ResourceDescriptor) throws -> WordSection {
         let candidateURLs: [URL?] = [
-            Bundle.main.url(forResource: resourceName, withExtension: resourceExtension),
-            Bundle.main.url(forResource: resourceName, withExtension: resourceExtension, subdirectory: "Resources"),
-            Bundle.main.resourceURL?.appendingPathComponent("\(resourceName).\(resourceExtension)"),
-            Bundle.main.resourceURL?.appendingPathComponent("Resources/\(resourceName).\(resourceExtension)")
+            Bundle.main.url(forResource: descriptor.fileName, withExtension: resourceExtension),
+            Bundle.main.url(forResource: descriptor.fileName, withExtension: resourceExtension, subdirectory: "Resources"),
+            Bundle.main.resourceURL?.appendingPathComponent("\(descriptor.fileName).\(resourceExtension)"),
+            Bundle.main.resourceURL?.appendingPathComponent("Resources/\(descriptor.fileName).\(resourceExtension)")
         ]
         guard let url = candidateURLs.compactMap({ $0 }).first(where: { FileManager.default.fileExists(atPath: $0.path) }) else {
             throw LoaderError.resourceMissing
@@ -1641,8 +3513,8 @@ private enum BundledWordBookLoader {
         }
         let subtitle = "共 \(entries.count) 词 · 乱序"
         return WordSection(
-            id: sectionID,
-            title: "高中英语词汇3500乱序",
+            id: descriptor.sectionID,
+            title: descriptor.title,
             subtitle: subtitle,
             words: entries,
             targetPasses: 1
