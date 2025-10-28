@@ -185,33 +185,13 @@ private struct SectionPassesPieChart: View {
             }
 
             // Stats
-            HStack(spacing: 30) {
-                VStack(spacing: 4) {
-                    Text("已完成")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Text("\(progressState.completedPasses)")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(appTealColor)
-                }
-
-                VStack(spacing: 4) {
-                    Text("目标")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Text("\(section.targetPasses)")
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(.primary)
-                }
-
-                VStack(spacing: 4) {
-                    Text("完成度")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Text(completionRate.formatted(.percent.precision(.fractionLength(0))))
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(.primary)
-                }
+            VStack(spacing: 4) {
+                Text("完成度")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Text(completionRate.formatted(.percent.precision(.fractionLength(0))))
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(.primary)
             }
         }
         .padding(20)
@@ -916,6 +896,134 @@ private struct ImportWordsShape: Shape {
     }
 }
 
+private struct CustomBookIcon: View {
+    var body: some View {
+        CustomBookIconShape()
+            .stroke(style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+            .aspectRatio(1, contentMode: .fit)
+    }
+}
+
+private struct CustomBookIconShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let scale = min(rect.width, rect.height) / 24.0
+        let offsetX = rect.midX - 12.0 * scale
+        let offsetY = rect.midY - 12.0 * scale
+
+        func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+            CGPoint(x: offsetX + x * scale, y: offsetY + y * scale)
+        }
+
+        var path = Path()
+
+        // Left page: M12 6.042 -> curve to 6,3.75 -> curve to 3,4.262 -> line to 3,18.512 -> curve to 6,18 -> curve to 12,20.292
+        path.move(to: point(12, 6.042))
+
+        // Curve from center top to left top
+        path.addQuadCurve(to: point(6, 3.75), control: point(9, 4.5))
+
+        // Curve to left edge
+        path.addQuadCurve(to: point(3, 4.262), control: point(4, 3.8))
+
+        // Vertical line down
+        path.addLine(to: point(3, 18.512))
+
+        // Curve to left bottom
+        path.addQuadCurve(to: point(6, 18), control: point(4, 18.3))
+
+        // Curve back to center bottom
+        path.addQuadCurve(to: point(12, 20.292), control: point(9, 19.5))
+
+        // Right page: M12 6.042 -> curve to 18,3.75 -> curve to 21,4.262 -> line to 21,18.512 -> curve to 18,18 -> curve to 12,20.292
+        path.move(to: point(12, 6.042))
+
+        // Curve from center top to right top
+        path.addQuadCurve(to: point(18, 3.75), control: point(15, 4.5))
+
+        // Curve to right edge
+        path.addQuadCurve(to: point(21, 4.262), control: point(20, 3.8))
+
+        // Vertical line down
+        path.addLine(to: point(21, 18.512))
+
+        // Curve to right bottom
+        path.addQuadCurve(to: point(18, 18), control: point(20, 18.3))
+
+        // Curve back to center bottom
+        path.addQuadCurve(to: point(12, 20.292), control: point(15, 19.5))
+
+        // Center vertical line
+        path.move(to: point(12, 6.042))
+        path.addLine(to: point(12, 20.292))
+
+        return path
+    }
+}
+
+private struct CustomRepeatIcon: View {
+    var body: some View {
+        CustomRepeatIconShape()
+            .stroke(style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+            .aspectRatio(1, contentMode: .fit)
+    }
+}
+
+private struct CustomRepeatIconShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let scale = min(rect.width, rect.height) / 24.0
+        let offsetX = rect.midX - 12.0 * scale
+        let offsetY = rect.midY - 12.0 * scale
+
+        func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+            CGPoint(x: offsetX + x * scale, y: offsetY + y * scale)
+        }
+
+        var path = Path()
+
+        // Top right arrow: M16.023 9.348 h4.992 v-.001
+        path.move(to: point(16.023, 9.348))
+        path.addLine(to: point(21.015, 9.348))
+        path.addLine(to: point(21.015, 9.347))
+
+        // Bottom left arrow: M2.985 19.644 v-4.992 m0 0 h4.992 m-4.993 0 l3.181 3.183
+        path.move(to: point(2.985, 19.644))
+        path.addLine(to: point(2.985, 14.652))
+
+        path.move(to: point(2.985, 14.652))
+        path.addLine(to: point(7.977, 14.652))
+
+        path.move(to: point(2.985, 14.652))
+        path.addLine(to: point(6.166, 17.835))
+
+        // Top curve: a8.25 8.25 0 0 0 13.803-3.7
+        // Starting from (6.166, 17.835), curve through arc
+        path.addArc(
+            center: point(12, 12),
+            radius: 8.25 * scale,
+            startAngle: .degrees(125),
+            endAngle: .degrees(30),
+            clockwise: true
+        )
+
+        // Bottom curve: M4.031 9.865 a8.25 8.25 0 0 1 13.803-3.7 l3.181 3.182
+        path.move(to: point(4.031, 9.865))
+        path.addArc(
+            center: point(12, 12),
+            radius: 8.25 * scale,
+            startAngle: .degrees(210),
+            endAngle: .degrees(315),
+            clockwise: false
+        )
+        path.addLine(to: point(21.015, 9.347))
+
+        // Arrow at top right: m0-4.991 v4.99
+        path.move(to: point(21.015, 4.356))
+        path.addLine(to: point(21.015, 9.346))
+
+        return path
+    }
+}
+
 private struct TrashIcon: View {
     var body: some View {
         TrashShape()
@@ -1321,6 +1429,7 @@ struct ContentView: View {
             }
             .toolbar(.hidden, for: .navigationBar)
         }
+        .tint(appTealColor)
         .safeAreaInset(edge: .bottom) {
             if isRootView {
                 BottomTabBar(
@@ -1792,23 +1901,30 @@ private struct SectionCardView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
-                    if section.targetPasses > 1 {
-                        Text("目标遍数 ×\(section.targetPasses)")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
                 }
 
                 Spacer(minLength: 12)
             }
 
             HStack(spacing: 12) {
-                Label("\(section.words.count)/\(studiedWords)", systemImage: "book")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Label("\(section.targetPasses)/\(normalizedPassCount)", systemImage: "repeat")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 4) {
+                    CustomBookIcon()
+                        .frame(width: 12, height: 12)
+                        .foregroundStyle(.secondary)
+                    Text("\(section.words.count)/\(studiedWords)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                HStack(spacing: 4) {
+                    CustomRepeatIcon()
+                        .frame(width: 12, height: 12)
+                        .foregroundStyle(.secondary)
+                    Text("\(section.targetPasses)/\(normalizedPassCount)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
                 Spacer()
                 Button {
                     Haptic.trigger(.light)
@@ -2529,6 +2645,7 @@ private struct AddSectionSheet: View {
     @State private var entries: [AddEntry]
     @State private var errorMessage: String?
     @State private var targetPasses: Int
+    @State private var targetPassesText: String
     @State private var searchText: String
 
     let initialSection: WordSection?
@@ -2543,13 +2660,16 @@ private struct AddSectionSheet: View {
             _subtitle = State(initialValue: section.subtitle ?? "")
             let mappedEntries = section.words.map { AddEntry(id: $0.id, word: $0.word, meaning: $0.meaning) }
             _entries = State(initialValue: mappedEntries.isEmpty ? [AddEntry()] : mappedEntries)
-            _targetPasses = State(initialValue: max(section.targetPasses, 1))
+            let passes = max(section.targetPasses, 1)
+            _targetPasses = State(initialValue: passes)
+            _targetPassesText = State(initialValue: "\(passes)")
             _searchText = State(initialValue: "")
         } else {
             _title = State(initialValue: "")
             _subtitle = State(initialValue: "")
             _entries = State(initialValue: [AddEntry()])
             _targetPasses = State(initialValue: 1)
+            _targetPassesText = State(initialValue: "1")
             _searchText = State(initialValue: "")
         }
     }
@@ -2561,12 +2681,50 @@ private struct AddSectionSheet: View {
                     Section("基本信息") {
                         TextField("词书名称", text: $title)
                         TextField("补充信息（选填）", text: $subtitle)
-                        Stepper {
-                            Text("目标遍数：\(targetPasses)")
-                        } onIncrement: {
-                            targetPasses += 1
-                        } onDecrement: {
-                            targetPasses = max(1, targetPasses - 1)
+                        HStack {
+                            Text("目标遍数")
+                            Spacer()
+                            HStack(spacing: 12) {
+                                Button {
+                                    Haptic.trigger(.light)
+                                    if targetPasses > 1 {
+                                        targetPasses -= 1
+                                        targetPassesText = "\(targetPasses)"
+                                    }
+                                } label: {
+                                    Image(systemName: "minus.circle.fill")
+                                        .font(.system(size: 22))
+                                        .foregroundStyle(targetPasses > 1 ? appTealColor : Color.gray.opacity(0.3))
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(targetPasses <= 1)
+
+                                TextField("", text: $targetPassesText)
+                                    .keyboardType(.numberPad)
+                                    .multilineTextAlignment(.center)
+                                    .frame(width: 50)
+                                    .onChange(of: targetPassesText) { _, newValue in
+                                        if let number = Int(newValue), number > 0 {
+                                            targetPasses = number
+                                        } else if newValue.isEmpty {
+                                            targetPasses = 1
+                                        } else {
+                                            // 如果输入无效，恢复到上一个有效值
+                                            targetPassesText = "\(targetPasses)"
+                                        }
+                                    }
+
+                                Button {
+                                    Haptic.trigger(.light)
+                                    targetPasses += 1
+                                    targetPassesText = "\(targetPasses)"
+                                } label: {
+                                    Image(systemName: "plus.circle.fill")
+                                        .font(.system(size: 22))
+                                        .foregroundStyle(appTealColor)
+                                }
+                                .buttonStyle(.plain)
+                            }
                         }
                     }
 
