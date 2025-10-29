@@ -626,76 +626,74 @@ private struct ProgressSectionRow: View {
 private struct ProfileCenterView: View {
     @ObservedObject var userProfile: UserProfileStore
     @EnvironmentObject private var sessionStore: AuthSessionStore
+    @EnvironmentObject private var progressStore: SectionProgressStore
+    @EnvironmentObject private var dailyProgressStore: DailyProgressStore
+    @EnvironmentObject private var bookStore: WordBookStore
 
     @State private var showingEmojiPicker = false
     @State private var showingNameEditor = false
     @State private var editingName = ""
+    @State private var showingSettingsDialog = false
 
     private let emojiOptions = ["🎓", "📚", "✏️", "📖", "🌟", "💡", "🚀", "🎯", "🏆", "💪", "🔥", "⚡️", "🌈", "🎨", "🎭", "🎪"]
 
     var body: some View {
-        GeometryReader { geometry in
-            ScrollView {
-                VStack(spacing: 0) {
-                    // Profile section centered
-                    VStack(spacing: 24) {
-                        // Avatar
-                        Button {
-                            Haptic.trigger(.light)
-                            showingEmojiPicker = true
-                        } label: {
-                            Text(userProfile.avatarEmoji)
-                                .font(.system(size: 80))
-                                .frame(width: 140, height: 140)
-                                .background(
-                                    Circle()
-                                        .fill(Color(.systemGray6))
-                                )
-                        }
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: 24) {
+                headerCard
+                dailyStatusCard
+                recentActivityCard
+                learningOverviewCard
 
-                        // Name
-                        Button {
-                            Haptic.trigger(.light)
-                            editingName = userProfile.userName
-                            showingNameEditor = true
-                        } label: {
-                            VStack(spacing: 6) {
-                                Text(userProfile.userName)
-                                    .font(.system(size: 28, weight: .semibold))
-                                    .foregroundColor(.primary)
-                                if let email = sessionStore.session?.email {
-                                    Text(email)
-                                        .font(.system(size: 15))
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, geometry.size.height * 0.2)
-
-                    Button {
-                        Haptic.trigger(.medium)
-                        sessionStore.signOut()
-                    } label: {
-                        Text("退出登录")
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundColor(.red)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .fill(Color(.systemBackground))
-                                    .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 4)
-                            )
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 36)
+                Button {
+                    Haptic.trigger(.medium)
+                    sessionStore.signOut()
+                } label: {
+                    Text("退出登录")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundColor(.red)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .fill(Color(.systemBackground))
+                                .shadow(color: .black.opacity(0.06), radius: 10, x: 0, y: 6)
+                        )
                 }
-                .frame(minHeight: geometry.size.height)
+                .padding(.top, 12)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 28)
+            .padding(.bottom, 80)
+        }
+        .background(
+            LinearGradient(
+                colors: [
+                    Color(.systemBackground),
+                    Color(.systemGray6)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+        )
+        .confirmationDialog("设置", isPresented: $showingSettingsDialog, titleVisibility: .visible) {
+            Button("修改昵称") {
+                Haptic.trigger(.light)
+                editingName = userProfile.userName
+                showingNameEditor = true
+            }
+            Button("更换头像") {
+                Haptic.trigger(.light)
+                showingEmojiPicker = true
+            }
+            if let email = sessionStore.session?.email {
+                Button("复制邮箱") {
+                    UIPasteboard.general.string = email
+                    Haptic.trigger(.light)
+                }
             }
         }
-        .background(Color(.systemGray6))
         .sheet(isPresented: $showingEmojiPicker) {
             EmojiPickerView(
                 selectedEmoji: $userProfile.avatarEmoji,
@@ -714,6 +712,203 @@ private struct ProfileCenterView: View {
             )
             .presentationDetents([.height(200)])
         }
+    }
+
+    private var headerCard: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(alignment: .top) {
+                Button {
+                    Haptic.trigger(.light)
+                    showingEmojiPicker = true
+                } label: {
+                    Text(userProfile.avatarEmoji)
+                        .font(.system(size: 52))
+                        .frame(width: 86, height: 86)
+                        .background(
+                            Circle()
+                                .fill(Color(.systemGray6))
+                        )
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Button {
+                        Haptic.trigger(.light)
+                        editingName = userProfile.userName
+                        showingNameEditor = true
+                    } label: {
+                        Text(userProfile.userName)
+                            .font(.system(size: 26, weight: .semibold))
+                            .foregroundColor(.primary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
+                    if let email = sessionStore.session?.email {
+                        Text(email)
+                            .font(.system(size: 15))
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text("未绑定邮箱")
+                            .font(.system(size: 15))
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Text(Date(), style: .time)
+                        .font(.caption)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(
+                            Capsule()
+                                .fill(Color(.systemGray6))
+                        )
+                }
+
+                Button {
+                    Haptic.trigger(.light)
+                    showingSettingsDialog = true
+                } label: {
+                    Image(systemName: "gearshape.fill")
+                        .font(.system(size: 19, weight: .semibold))
+                        .foregroundColor(appTealColor)
+                        .padding(10)
+                        .background(
+                            Circle()
+                                .fill(appTealColor.opacity(0.12))
+                        )
+                }
+            }
+
+            Divider()
+
+            HStack(spacing: 12) {
+                ProfileSummaryChip(
+                    title: "词书数量",
+                    value: "\(bookStore.sections.count)"
+                )
+                ProfileSummaryChip(
+                    title: "已完成遍数",
+                    value: "\(totalCompletedPasses)"
+                )
+                ProfileSummaryChip(
+                    title: "今日单词",
+                    value: "\(wordsToday)"
+                )
+            }
+        }
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color(.systemBackground))
+                .shadow(color: .black.opacity(0.06), radius: 16, x: 0, y: 12)
+        )
+    }
+
+    private var dailyStatusCard: some View {
+        ProfileInfoCard(
+            title: "今日状态",
+            subtitle: todaySubtitle,
+            badge: wordsToday > 0 ? "已打卡" : "待学习",
+            systemImage: wordsToday > 0 ? "checkmark.circle.fill" : "circle.dashed",
+            accent: wordsToday > 0 ? Color.green : Color.orange
+        )
+    }
+
+    private var recentActivityCard: some View {
+        guard let recent = recentSection else {
+            return ProfileInfoCard(
+                title: "最近学习",
+                subtitle: "还没有开始任何词书，去词书页挑选吧。",
+                badge: "无记录",
+                systemImage: "clock.arrow.circlepath",
+                accent: Color.gray
+            )
+        }
+
+        let state = progressStore.progress(for: recent.id)
+        let totalPages = max(1, (recent.words.count + wordsPerPage - 1) / wordsPerPage)
+        let progressText = "第 \(min(state.completedPages + 1, totalPages))/\(totalPages) 页 · 第 \(min(state.completedPasses + 1, recent.targetPasses))/\(recent.targetPasses) 遍"
+
+        return ProfileInfoCard(
+            title: "最近学习",
+            subtitle: "\(recent.title)\n\(progressText)",
+            badge: "继续学习",
+            systemImage: "book.circle",
+            accent: appTealColor
+        )
+    }
+
+    private var learningOverviewCard: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Text("学习纵览")
+                .font(.system(size: 20, weight: .semibold))
+
+            VStack(spacing: 14) {
+                overviewRow(title: "累计词书", value: "\(bookStore.sections.count) 本", icon: "books.vertical")
+                overviewRow(title: "累计遍数", value: "\(totalCompletedPasses) 遍", icon: "repeat.circle")
+                overviewRow(title: "今日单词", value: "\(wordsToday) 个", icon: "sun.max")
+            }
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color(.systemBackground))
+                .shadow(color: .black.opacity(0.04), radius: 14, x: 0, y: 10)
+        )
+    }
+
+    private func overviewRow(title: String, value: String, icon: String) -> some View {
+        HStack(spacing: 16) {
+            Image(systemName: icon)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundColor(appTealColor)
+                .frame(width: 36, height: 36)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(appTealColor.opacity(0.12))
+                )
+
+            Text(title)
+                .font(.system(size: 16, weight: .medium))
+                .foregroundColor(.primary)
+
+            Spacer()
+
+            Text(value)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(.primary)
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var wordsToday: Int {
+        dailyProgressStore.wordsLearned(on: Date())
+    }
+
+    private var todaySubtitle: String {
+        if wordsToday == 0 {
+            return "今天还没有学习，完成一页词书即可点亮进度。"
+        }
+        if wordsToday < wordsPerPage {
+            return "刚刚起步，继续努力完成下一页吧。"
+        }
+        return "已学习 \(wordsToday) 个单词，保持势头！"
+    }
+
+    private var totalCompletedPasses: Int {
+        bookStore.sections.reduce(0) { result, section in
+            result + progressStore.completedPasses(for: section.id)
+        }
+    }
+
+    private var recentSection: WordSection? {
+        bookStore.sections.max { lhs, rhs in
+            progressScore(for: lhs) < progressScore(for: rhs)
+        }
+    }
+
+    private func progressScore(for section: WordSection) -> Int {
+        let state = progressStore.progress(for: section.id)
+        return state.completedPasses * 10_000 + state.completedPages
     }
 }
 
@@ -898,6 +1093,79 @@ private struct ProfileActionButton: View {
         } else {
             EmptyView()
         }
+    }
+}
+
+private struct ProfileSummaryChip: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        VStack(spacing: 6) {
+            Text(value)
+                .font(.system(size: 18, weight: .semibold, design: .rounded))
+                .foregroundColor(appTealColor)
+            Text(title)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color(.systemGray6))
+        )
+    }
+}
+
+private struct ProfileInfoCard: View {
+    let title: String
+    let subtitle: String
+    let badge: String
+    let systemImage: String
+    let accent: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text(title)
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundColor(.primary)
+                Spacer()
+                Text(badge)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(accent)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(
+                        Capsule()
+                            .fill(accent.opacity(0.12))
+                    )
+            }
+
+            HStack(alignment: .top, spacing: 14) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundColor(accent)
+                    .frame(width: 46, height: 46)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(accent.opacity(0.12))
+                    )
+
+                Text(subtitle)
+                    .font(.system(size: 15))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color(.systemBackground))
+                .shadow(color: .black.opacity(0.05), radius: 12, x: 0, y: 10)
+        )
     }
 }
 
@@ -1580,6 +1848,9 @@ struct ContentView: View {
             if selectedTab == .profile {
                 ProfileCenterView(userProfile: userProfile)
                     .transition(transition(for: .profile))
+                    .environmentObject(bookStore)
+                    .environmentObject(progressStore)
+                    .environmentObject(dailyProgressStore)
             }
         }
         .animation(.easeInOut(duration: 0.28), value: selectedTab)
