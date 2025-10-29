@@ -1642,7 +1642,8 @@ final class WordBookStore: ObservableObject {
         storageURL = directory.appendingPathComponent("wordbook-\(sanitizedUserId).json")
 
         let legacyURL = directory.appendingPathComponent("wordbook.json")
-        if fileManager.fileExists(atPath: legacyURL.path),
+        if sanitizedUserId == "default",
+           fileManager.fileExists(atPath: legacyURL.path),
            !fileManager.fileExists(atPath: storageURL.path) {
             try? fileManager.copyItem(at: legacyURL, to: storageURL)
         }
@@ -1683,17 +1684,18 @@ final class WordBookStore: ObservableObject {
         }
 
         var needsSave = false
+
+        let originalCount = sections.count
+        sections.removeAll { $0.title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "test" }
+        if sections.count != originalCount {
+            needsSave = true
+        }
         let bundledSections = BundledWordBookLoader.loadAll()
         for bundledSection in bundledSections {
             if !sections.contains(where: { $0.id == bundledSection.id || $0.title == bundledSection.title }) {
                 sections.append(bundledSection)
                 needsSave = true
             }
-        }
-
-        if sections.isEmpty {
-            sections = WordSection.sampleData
-            needsSave = true
         }
 
         if needsSave || !loadedFromDisk {
