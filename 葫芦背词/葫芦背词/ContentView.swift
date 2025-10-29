@@ -12,6 +12,32 @@ import UIKit
 private let wordsPerPage = 10
 private let appTealColor = Color(red: 0.27, green: 0.63, blue: 0.55) // 湖绿色 #45A08C
 
+private func sanitizeUserIdentifier(_ value: String) -> String {
+    let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
+    var result = ""
+    var hasAlphanumeric = false
+
+    for scalar in value.unicodeScalars {
+        if allowed.contains(scalar) {
+            result.append(String(scalar))
+            if CharacterSet.alphanumerics.contains(scalar) {
+                hasAlphanumeric = true
+            }
+        } else {
+            result.append("_")
+        }
+    }
+
+    if hasAlphanumeric {
+        return result
+    }
+    return "default"
+}
+
+private func namespacedKey(_ base: String, userId: String) -> String {
+    "\(base).\(sanitizeUserIdentifier(userId))"
+}
+
 private enum MainTab: CaseIterable {
     case home
     case progress
@@ -599,6 +625,7 @@ private struct ProgressSectionRow: View {
 
 private struct ProfileCenterView: View {
     @ObservedObject var userProfile: UserProfileStore
+    @EnvironmentObject private var sessionStore: AuthSessionStore
 
     @State private var showingEmojiPicker = false
     @State private var showingNameEditor = false
@@ -632,13 +659,38 @@ private struct ProfileCenterView: View {
                             editingName = userProfile.userName
                             showingNameEditor = true
                         } label: {
-                            Text(userProfile.userName)
-                                .font(.system(size: 28, weight: .semibold))
-                                .foregroundColor(.primary)
+                            VStack(spacing: 6) {
+                                Text(userProfile.userName)
+                                    .font(.system(size: 28, weight: .semibold))
+                                    .foregroundColor(.primary)
+                                if let email = sessionStore.session?.email {
+                                    Text(email)
+                                        .font(.system(size: 15))
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
                         }
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.top, geometry.size.height * 0.2)
+
+                    Button {
+                        Haptic.trigger(.medium)
+                        sessionStore.signOut()
+                    } label: {
+                        Text("退出登录")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(.red)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(Color(.systemBackground))
+                                    .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 4)
+                            )
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.top, 36)
                 }
                 .frame(minHeight: geometry.size.height)
             }
@@ -835,11 +887,9 @@ private struct ProfileActionButton: View {
             Haptic.trigger(.heavy)
         }
     }
-}
 
-private extension ProfileActionButton {
     @ViewBuilder
-    var iconView: some View {
+    private var iconView: some View {
         if let customIcon {
             customIcon
         } else if let systemImage {
@@ -1318,9 +1368,17 @@ final class WordBookStore: ObservableObject {
 
     private let storageURL: URL
 
-    init() {
-        let directory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        storageURL = directory.appendingPathComponent("wordbook.json")
+    init(userId: String, fileManager: FileManager = .default) {
+        let directory = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let sanitizedUserId = sanitizeUserIdentifier(userId)
+        storageURL = directory.appendingPathComponent("wordbook-\(sanitizedUserId).json")
+
+        let legacyURL = directory.appendingPathComponent("wordbook.json")
+        if fileManager.fileExists(atPath: legacyURL.path),
+           !fileManager.fileExists(atPath: storageURL.path) {
+            try? fileManager.copyItem(at: legacyURL, to: storageURL)
+        }
+
         load()
     }
 
@@ -1382,19 +1440,29 @@ final class WordBookStore: ObservableObject {
 }
 
 struct ContentView: View {
-    @StateObject private var bookStore = WordBookStore()
+    @EnvironmentObject private var sessionStore: AuthSessionStore
+    @StateObject private var bookStore: WordBookStore
     @State private var showingAddSection = false
     @State private var sectionToDelete: WordSection?
     @State private var editingSection: WordSection?
-    @StateObject private var hideState = WordVisibilityStore()
-    @StateObject private var progressStore = SectionProgressStore()
-    @StateObject private var dailyProgressStore = DailyProgressStore()
-    @StateObject private var userProfile = UserProfileStore()
+    @StateObject private var hideState: WordVisibilityStore
+    @StateObject private var progressStore: SectionProgressStore
+    @StateObject private var dailyProgressStore: DailyProgressStore
+    @StateObject private var userProfile: UserProfileStore
     @State private var showingAutomationAgent = false
     @State private var importingSection: WordSection?
     @State private var selectedTab: MainTab = .home
     @State private var isRootView: Bool = true
     @State private var previousTab: MainTab = .home
+
+    init(session: AuthSession) {
+        let userId = session.userId
+        _bookStore = StateObject(wrappedValue: WordBookStore(userId: userId))
+        _hideState = StateObject(wrappedValue: WordVisibilityStore(userId: userId))
+        _progressStore = StateObject(wrappedValue: SectionProgressStore(userId: userId))
+        _dailyProgressStore = StateObject(wrappedValue: DailyProgressStore(userId: userId))
+        _userProfile = StateObject(wrappedValue: UserProfileStore(userId: userId))
+    }
 
     var body: some View {
         NavigationStack {
@@ -3272,24 +3340,14 @@ final class SectionProgressStore: ObservableObject {
     }
 
     private let defaults: UserDefaults
-    private let defaultsKey = "SectionProgressStore.v1"
+    private let defaultsKey: String
+    private static let legacyDefaultsKey = "SectionProgressStore.v1"
     private var isRestoring = false
 
-    init(userDefaults: UserDefaults = .standard) {
+    init(userId: String, userDefaults: UserDefaults = .standard) {
         self.defaults = userDefaults
-        if let data = userDefaults.data(forKey: defaultsKey) {
-            if let decoded = try? JSONDecoder().decode([UUID: ProgressState].self, from: data) {
-                isRestoring = true
-                progressStates = decoded
-                isRestoring = false
-            } else if let legacy = try? JSONDecoder().decode([UUID: Int].self, from: data) {
-                isRestoring = true
-                progressStates = legacy.reduce(into: [:]) { result, element in
-                    result[element.key] = ProgressState(completedPages: element.value, completedPasses: 0)
-                }
-                isRestoring = false
-            }
-        }
+        self.defaultsKey = namespacedKey(Self.legacyDefaultsKey, userId: userId)
+        loadInitialState()
     }
 
     func progress(for sectionID: UUID) -> ProgressState {
@@ -3372,6 +3430,45 @@ final class SectionProgressStore: ObservableObject {
               let data = try? JSONEncoder().encode(progressStates) else { return }
         defaults.set(data, forKey: defaultsKey)
     }
+
+    private func loadInitialState() {
+        var migratedFromLegacy = false
+
+        if let data = defaults.data(forKey: defaultsKey) {
+            _ = decodeProgress(from: data)
+        } else if let legacyData = defaults.data(forKey: Self.legacyDefaultsKey),
+                  decodeProgress(from: legacyData) {
+            migratedFromLegacy = true
+        }
+
+        if migratedFromLegacy {
+            persist()
+            defaults.removeObject(forKey: Self.legacyDefaultsKey)
+        }
+    }
+
+    @discardableResult
+    private func decodeProgress(from data: Data) -> Bool {
+        let decoder = JSONDecoder()
+
+        if let decoded = try? decoder.decode([UUID: ProgressState].self, from: data) {
+            isRestoring = true
+            progressStates = decoded
+            isRestoring = false
+            return true
+        }
+
+        if let legacy = try? decoder.decode([UUID: Int].self, from: data) {
+            isRestoring = true
+            progressStates = legacy.reduce(into: [:]) { result, element in
+                result[element.key] = ProgressState(completedPages: element.value, completedPasses: 0)
+            }
+            isRestoring = false
+            return true
+        }
+
+        return false
+    }
 }
 
 final class DailyProgressStore: ObservableObject {
@@ -3385,17 +3482,14 @@ final class DailyProgressStore: ObservableObject {
     }
 
     private let defaults: UserDefaults
-    private let defaultsKey = "DailyProgressStore.v1"
+    private let defaultsKey: String
+    private static let legacyDefaultsKey = "DailyProgressStore.v1"
     private var isRestoring = false
 
-    init(userDefaults: UserDefaults = .standard) {
+    init(userId: String, userDefaults: UserDefaults = .standard) {
         self.defaults = userDefaults
-        if let data = userDefaults.data(forKey: defaultsKey),
-           let decoded = try? JSONDecoder().decode([String: Int].self, from: data) {
-            isRestoring = true
-            records = decoded
-            isRestoring = false
-        }
+        self.defaultsKey = namespacedKey(Self.legacyDefaultsKey, userId: userId)
+        loadInitialState()
     }
 
     func recordWordsLearned(count: Int, date: Date = Date()) {
@@ -3435,6 +3529,36 @@ final class DailyProgressStore: ObservableObject {
               let data = try? JSONEncoder().encode(records) else { return }
         defaults.set(data, forKey: defaultsKey)
     }
+
+    private func loadInitialState() {
+        var migratedFromLegacy = false
+
+        if let data = defaults.data(forKey: defaultsKey) {
+            _ = decodeRecords(from: data)
+        } else if let legacyData = defaults.data(forKey: Self.legacyDefaultsKey),
+                  decodeRecords(from: legacyData) {
+            migratedFromLegacy = true
+        }
+
+        if migratedFromLegacy {
+            persist()
+            defaults.removeObject(forKey: Self.legacyDefaultsKey)
+        }
+    }
+
+    @discardableResult
+    private func decodeRecords(from data: Data) -> Bool {
+        let decoder = JSONDecoder()
+
+        if let decoded = try? decoder.decode([String: Int].self, from: data) {
+            isRestoring = true
+            records = decoded
+            isRestoring = false
+            return true
+        }
+
+        return false
+    }
 }
 
 final class UserProfileStore: ObservableObject {
@@ -3447,13 +3571,41 @@ final class UserProfileStore: ObservableObject {
     }
 
     private let defaults: UserDefaults
-    private let nameKey = "UserProfileStore.name"
-    private let emojiKey = "UserProfileStore.emoji"
+    private let nameKey: String
+    private let emojiKey: String
+    private static let legacyNameKey = "UserProfileStore.name"
+    private static let legacyEmojiKey = "UserProfileStore.emoji"
 
-    init(userDefaults: UserDefaults = .standard) {
+    init(userId: String, userDefaults: UserDefaults = .standard) {
         self.defaults = userDefaults
-        self.userName = userDefaults.string(forKey: nameKey) ?? "学习者"
-        self.avatarEmoji = userDefaults.string(forKey: emojiKey) ?? "🎓"
+        self.nameKey = namespacedKey(Self.legacyNameKey, userId: userId)
+        self.emojiKey = namespacedKey(Self.legacyEmojiKey, userId: userId)
+
+        var migrated = false
+
+        if let storedName = userDefaults.string(forKey: nameKey) {
+            self.userName = storedName
+        } else if let legacyName = userDefaults.string(forKey: Self.legacyNameKey) {
+            self.userName = legacyName
+            migrated = true
+            defaults.removeObject(forKey: Self.legacyNameKey)
+        } else {
+            self.userName = "学习者"
+        }
+
+        if let storedEmoji = userDefaults.string(forKey: emojiKey) {
+            self.avatarEmoji = storedEmoji
+        } else if let legacyEmoji = userDefaults.string(forKey: Self.legacyEmojiKey) {
+            self.avatarEmoji = legacyEmoji
+            migrated = true
+            defaults.removeObject(forKey: Self.legacyEmojiKey)
+        } else {
+            self.avatarEmoji = "🎓"
+        }
+
+        if migrated {
+            persist()
+        }
     }
 
     private func persist() {
@@ -3468,17 +3620,14 @@ final class WordVisibilityStore: ObservableObject {
     }
 
     private let defaults: UserDefaults
-    private let defaultsKey = "WordVisibilityStore.v1"
+    private let defaultsKey: String
+    private static let legacyDefaultsKey = "WordVisibilityStore.v1"
     private var isRestoring = false
 
-    init(userDefaults: UserDefaults = .standard) {
+    init(userId: String, userDefaults: UserDefaults = .standard) {
         self.defaults = userDefaults
-        if let data = defaults.data(forKey: defaultsKey),
-           let decoded = try? JSONDecoder().decode([UUID: EntryVisibility].self, from: data) {
-            isRestoring = true
-            visibility = decoded
-            isRestoring = false
-        }
+        self.defaultsKey = namespacedKey(Self.legacyDefaultsKey, userId: userId)
+        loadInitialState()
     }
 
     func isWordVisible(_ id: UUID) -> Bool {
@@ -3576,6 +3725,35 @@ final class WordVisibilityStore: ObservableObject {
         if let data = try? JSONEncoder().encode(visibility) {
             defaults.set(data, forKey: defaultsKey)
         }
+    }
+
+    private func loadInitialState() {
+        var migratedFromLegacy = false
+
+        if let data = defaults.data(forKey: defaultsKey),
+           decodeVisibility(from: data) {
+            return
+        } else if let legacyData = defaults.data(forKey: Self.legacyDefaultsKey),
+                  decodeVisibility(from: legacyData) {
+            migratedFromLegacy = true
+        }
+
+        if migratedFromLegacy {
+            persist()
+            defaults.removeObject(forKey: Self.legacyDefaultsKey)
+        }
+    }
+
+    @discardableResult
+    private func decodeVisibility(from data: Data) -> Bool {
+        let decoder = JSONDecoder()
+        if let decoded = try? decoder.decode([UUID: EntryVisibility].self, from: data) {
+            isRestoring = true
+            visibility = decoded
+            isRestoring = false
+            return true
+        }
+        return false
     }
 
     struct EntryVisibility: Codable, Equatable {
@@ -3791,7 +3969,11 @@ private extension WordSection {
 }
 
 #Preview {
-    ContentView()
-        .environmentObject(WordVisibilityStore())
-        .environmentObject(SectionProgressStore())
+    let session = AuthSession.preview
+    let suiteName = "PreviewAuthSessionStore"
+    let previewDefaults = UserDefaults(suiteName: suiteName)
+    previewDefaults?.removePersistentDomain(forName: suiteName)
+    let store = AuthSessionStore(userDefaults: previewDefaults ?? .standard, initialSession: session)
+    return ContentView(session: session)
+        .environmentObject(store)
 }

@@ -1,0 +1,99 @@
+{
+  "" : {
+    "diagnostics" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/葫芦背词-primary.dia",
+    "emit-module-dependencies" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/葫芦背词-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/葫芦背词-primary-emit-module.dia",
+    "pch" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/葫芦背词-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/葫芦背词-primary.swiftdeps"
+  },
+  "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/DerivedSources/GeneratedAssetSymbols.swift" : {
+    "const-values" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/GeneratedAssetSymbols.swiftconstvalues",
+    "dependencies" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/GeneratedAssetSymbols.d",
+    "diagnostics" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/GeneratedAssetSymbols.dia",
+    "index-unit-output-path" : "/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/GeneratedAssetSymbols.o",
+    "llvm-bc" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/GeneratedAssetSymbols.bc",
+    "object" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/GeneratedAssetSymbols.o",
+    "swift-dependencies" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/GeneratedAssetSymbols.swiftdeps",
+    "swiftmodule" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/GeneratedAssetSymbols~partial.swiftmodule"
+  },
+  "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/葫芦背词/AuthSession.swift" : {
+    "const-values" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/AuthSession.swiftconstvalues",
+    "dependencies" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/AuthSession.d",
+    "diagnostics" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/AuthSession.dia",
+    "index-unit-output-path" : "/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/AuthSession.o",
+    "llvm-bc" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/AuthSession.bc",
+    "object" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/AuthSession.o",
+    "swift-dependencies" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/AuthSession.swiftdeps",
+    "swiftmodule" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/AuthSession~partial.swiftmodule"
+  },
+  "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/葫芦背词/AuthSessionStore.swift" : {
+    "const-values" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/AuthSessionStore.swiftconstvalues",
+    "dependencies" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/AuthSessionStore.d",
+    "diagnostics" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/AuthSessionStore.dia",
+    "index-unit-output-path" : "/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/AuthSessionStore.o",
+    "llvm-bc" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/AuthSessionStore.bc",
+    "object" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/AuthSessionStore.o",
+    "swift-dependencies" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/AuthSessionStore.swiftdeps",
+    "swiftmodule" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/AuthSessionStore~partial.swiftmodule"
+  },
+  "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/葫芦背词/ContentView.swift" : {
+    "const-values" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/ContentView.swiftconstvalues",
+    "dependencies" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/ContentView.d",
+    "diagnostics" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/ContentView.dia",
+    "index-unit-output-path" : "/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/ContentView.o",
+    "llvm-bc" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/ContentView.bc",
+    "object" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/ContentView.o",
+    "swift-dependencies" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/ContentView.swiftdeps",
+    "swiftmodule" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/ContentView~partial.swiftmodule"
+  },
+  "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/葫芦背词/HapticManager.swift" : {
+    "const-values" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/HapticManager.swiftconstvalues",
+    "dependencies" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/HapticManager.d",
+    "diagnostics" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/HapticManager.dia",
+    "index-unit-output-path" : "/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/HapticManager.o",
+    "llvm-bc" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/HapticManager.bc",
+    "object" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/HapticManager.o",
+    "swift-dependencies" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/HapticManager.swiftdeps",
+    "swiftmodule" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/HapticManager~partial.swiftmodule"
+  },
+  "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/葫芦背词/SignInView.swift" : {
+    "const-values" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/SignInView.swiftconstvalues",
+    "dependencies" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/SignInView.d",
+    "diagnostics" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/SignInView.dia",
+    "index-unit-output-path" : "/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/SignInView.o",
+    "llvm-bc" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/SignInView.bc",
+    "object" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/SignInView.o",
+    "swift-dependencies" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/SignInView.swiftdeps",
+    "swiftmodule" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/SignInView~partial.swiftmodule"
+  },
+  "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/葫芦背词/SupabaseAuthService.swift" : {
+    "const-values" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/SupabaseAuthService.swiftconstvalues",
+    "dependencies" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/SupabaseAuthService.d",
+    "diagnostics" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/SupabaseAuthService.dia",
+    "index-unit-output-path" : "/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/SupabaseAuthService.o",
+    "llvm-bc" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/SupabaseAuthService.bc",
+    "object" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/SupabaseAuthService.o",
+    "swift-dependencies" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/SupabaseAuthService.swiftdeps",
+    "swiftmodule" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/SupabaseAuthService~partial.swiftmodule"
+  },
+  "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/葫芦背词/SupabaseConfig.swift" : {
+    "const-values" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/SupabaseConfig.swiftconstvalues",
+    "dependencies" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/SupabaseConfig.d",
+    "diagnostics" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/SupabaseConfig.dia",
+    "index-unit-output-path" : "/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/SupabaseConfig.o",
+    "llvm-bc" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/SupabaseConfig.bc",
+    "object" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/SupabaseConfig.o",
+    "swift-dependencies" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/SupabaseConfig.swiftdeps",
+    "swiftmodule" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/SupabaseConfig~partial.swiftmodule"
+  },
+  "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/葫芦背词/____App.swift" : {
+    "const-values" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/____App.swiftconstvalues",
+    "dependencies" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/____App.d",
+    "diagnostics" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/____App.dia",
+    "index-unit-output-path" : "/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/____App.o",
+    "llvm-bc" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/____App.bc",
+    "object" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/____App.o",
+    "swift-dependencies" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/____App.swiftdeps",
+    "swiftmodule" : "/Users/linfanbin/Desktop/葫芦背词/葫芦背词/DerivedData/Build/Intermediates.noindex/葫芦背词.build/Debug-iphoneos/葫芦背词.build/Objects-normal/arm64/____App~partial.swiftmodule"
+  }
+}

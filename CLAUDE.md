@@ -38,6 +38,13 @@ Three ObservableObject stores handle app state:
 1. **WordBookStore** (`ContentView.swift:685`)
    - Manages all WordSection collections
    - Persists to `wordbook.json` in Documents directory
+
+## Supabase Email Login
+
+- Client auth configuration lives in `葫芦背词/AuthSessionStore.swift`, `SupabaseAuthService.swift`, `SignInView.swift`, and `SupabaseConfig.swift`.
+- Before building, edit `SupabaseConfig.swift` and replace `YOUR_SUPABASE_ANON_KEY` with the project's anon API key (Dashboard → Settings → API).
+- Users must exist in Supabase Auth with email/password credentials. Enable email sign-up or create users manually in the Supabase dashboard.
+- The app stores the Supabase session in `UserDefaults` and automatically restores it on launch. Sign-out clears local state and calls Supabase `/auth/v1/logout`.
    - Auto-loads bundled word books from Resources/ on first launch
    - Provides CRUD operations: `addSection()`, `updateSection()`, `updateWords()`, `deleteSection()`
 
