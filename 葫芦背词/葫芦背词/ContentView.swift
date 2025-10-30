@@ -12,6 +12,7 @@ import PhotosUI
 import PhotosUI
 
 private let wordsPerPage = 10
+private let recycleBinRetentionInterval: TimeInterval = 30 * 24 * 60 * 60
 private let appTealColor = Color(red: 0.27, green: 0.63, blue: 0.55) // 湖绿色 #45A08C
 
 private func sanitizeUserIdentifier(_ value: String) -> String {
@@ -638,6 +639,7 @@ private struct ProfileCenterView: View {
     @State private var showingSettingsDialog = false
     @State private var showPhotoPicker = false
     @State private var photoPickerItem: PhotosPickerItem?
+    @State private var showingRecycleBin = false
 
     private let emojiOptions = ["🎓", "📚", "✏️", "📖", "🌟", "💡", "🚀", "🎯", "🏆", "💪", "🔥", "⚡️", "🌈", "🎨", "🎭", "🎪"]
 
@@ -647,7 +649,7 @@ private struct ProfileCenterView: View {
                 headerCard
                 dailyStatusCard
                 recentActivityCard
-                learningOverviewCard
+                recycleBinCard
 
                 Button {
                     Haptic.trigger(.medium)
@@ -728,6 +730,10 @@ private struct ProfileCenterView: View {
             )
             .presentationDetents([.height(200)])
         }
+        .sheet(isPresented: $showingRecycleBin) {
+            RecycleBinView(bookStore: bookStore)
+                .presentationDetents([.medium, .large])
+        }
         .photosPicker(isPresented: $showPhotoPicker, selection: $photoPickerItem, matching: .images)
         .onChange(of: photoPickerItem) { _, newItem in
             guard let newItem else { return }
@@ -762,14 +768,6 @@ private struct ProfileCenterView: View {
                             .foregroundStyle(.secondary)
                     }
 
-                    Text(Date(), style: .time)
-                        .font(.caption)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(
-                            Capsule()
-                                .fill(Color(.systemGray6))
-                        )
                 }
 
                 Button {
@@ -790,18 +788,18 @@ private struct ProfileCenterView: View {
             Divider()
 
             HStack(spacing: 12) {
-                ProfileSummaryChip(
-                    title: "词书数量",
-                    value: "\(bookStore.sections.count)"
-                )
-                ProfileSummaryChip(
-                    title: "已完成遍数",
-                    value: "\(totalCompletedPasses)"
-                )
-                ProfileSummaryChip(
-                    title: "今日单词",
-                    value: "\(wordsToday)"
-                )
+        ProfileSummaryChip(
+            title: "词书数量",
+            value: "\(bookStore.sections.count)"
+        )
+        ProfileSummaryChip(
+            title: "已完成遍数",
+            value: "\(totalCompletedPasses)"
+        )
+        ProfileSummaryChip(
+            title: "今日单词",
+            value: "\(wordsToday)"
+        )
             }
         }
         .padding(20)
@@ -861,10 +859,10 @@ private struct ProfileCenterView: View {
     private var dailyStatusCard: some View {
         ProfileInfoCard(
             title: "今日状态",
-            subtitle: todaySubtitle,
-            badge: wordsToday > 0 ? "已打卡" : "待学习",
-            systemImage: wordsToday > 0 ? "checkmark.circle.fill" : "circle.dashed",
-            accent: wordsToday > 0 ? Color.green : Color.orange
+            subtitle: todaySubtitle.subtitle,
+            badge: todaySubtitle.badge,
+            systemImage: todaySubtitle.icon,
+            accent: todaySubtitle.accent
         )
     }
 
@@ -892,67 +890,135 @@ private struct ProfileCenterView: View {
         )
     }
 
-    private var learningOverviewCard: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Text("学习纵览")
-                .font(.system(size: 20, weight: .semibold))
-
-            VStack(spacing: 14) {
-                overviewRow(title: "累计词书", value: "\(bookStore.sections.count) 本", icon: "books.vertical")
-                overviewRow(title: "累计遍数", value: "\(totalCompletedPasses) 遍", icon: "repeat.circle")
-                overviewRow(title: "今日单词", value: "\(wordsToday) 个", icon: "sun.max")
-            }
+    private var recycleBinCard: some View {
+        Button {
+            Haptic.trigger(.medium)
+            bookStore.purgeExpiredTrashIfNeeded()
+            showingRecycleBin = true
+        } label: {
+            ProfileInfoCard(
+                title: "回收站",
+                subtitle: recycleBinSubtitle,
+                badge: recycleBinBadge,
+                systemImage: "trash",
+                accent: recycleBinAccent
+            )
         }
-        .padding(20)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color(.systemBackground))
-                .shadow(color: .black.opacity(0.04), radius: 14, x: 0, y: 10)
-        )
+        .buttonStyle(.plain)
     }
 
-    private func overviewRow(title: String, value: String, icon: String) -> some View {
-        HStack(spacing: 16) {
-            Image(systemName: icon)
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundColor(appTealColor)
-                .frame(width: 36, height: 36)
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(appTealColor.opacity(0.12))
-                )
-
-            Text(title)
-                .font(.system(size: 16, weight: .medium))
-                .foregroundColor(.primary)
-
-            Spacer()
-
-            Text(value)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(.primary)
+    private var recycleBinSubtitle: String {
+        let count = bookStore.trashedSections.count
+        guard count > 0 else {
+            return "暂无待恢复的词书"
         }
-        .padding(.vertical, 4)
+        return "\(count) 本词书可恢复 · 30 天内自动清除"
+    }
+
+    private var recycleBinBadge: String? {
+        bookStore.trashedSections.isEmpty ? "已清空" : "管理"
+    }
+
+    private var recycleBinAccent: Color {
+        bookStore.trashedSections.isEmpty ? Color(.systemGray3) : appTealColor
     }
 
     private var wordsToday: Int {
         dailyProgressStore.wordsLearned(on: Date())
     }
 
-    private var todaySubtitle: String {
-        if wordsToday == 0 {
-            return "今天还没有学习，完成一页词书即可点亮进度。"
-        }
-        if wordsToday < wordsPerPage {
-            return "刚刚起步，继续努力完成下一页吧。"
-        }
-        return "已学习 \(wordsToday) 个单词，保持势头！"
-    }
-
     private var totalCompletedPasses: Int {
         bookStore.sections.reduce(0) { result, section in
             result + progressStore.completedPasses(for: section.id)
+        }
+    }
+
+    private var todaySubtitle: DailyStatusInfo {
+        switch wordsToday {
+        case 0:
+            return DailyStatusInfo(
+                subtitle: "小葫芦醒来啦，开启今天的第一步！",
+                badge: "待出发 🌱",
+                icon: "sparkles",
+                accent: Color.orange
+            )
+        case 1..<100:
+            return DailyStatusInfo(
+                subtitle: "刚刚起步，继续努力完成下一页吧。",
+                badge: "热身中 💪",
+                icon: "figure.walk",
+                accent: appTealColor
+            )
+        case 100..<200:
+            return DailyStatusInfo(
+                subtitle: "小试牛刀！已学习 \(wordsToday) 个单词。",
+                badge: "小试牛刀 🥳",
+                icon: "wand.and.stars",
+                accent: Color.green
+            )
+        case 200..<300:
+            return DailyStatusInfo(
+                subtitle: "渐入佳境，加速吸收词汇！",
+                badge: "渐入佳境 🚀",
+                icon: "tornado",
+                accent: Color.blue
+            )
+        case 300..<400:
+            return DailyStatusInfo(
+                subtitle: "状态上升中，保持这股劲！",
+                badge: "状态上升 📈",
+                icon: "flame",
+                accent: Color.pink
+            )
+        case 400..<500:
+            return DailyStatusInfo(
+                subtitle: "全力以赴的你，离目标更近了！",
+                badge: "全力以赴 ⚡️",
+                icon: "bolt.fill",
+                accent: Color.purple
+            )
+        case 500..<600:
+            return DailyStatusInfo(
+                subtitle: "爆发时刻，词汇量迅速攀升！",
+                badge: "爆发时刻 💥",
+                icon: "burst.fill",
+                accent: Color.red
+            )
+        case 600..<700:
+            return DailyStatusInfo(
+                subtitle: "火力全开，词书被你点燃！",
+                badge: "火力全开 🔥",
+                icon: "sun.max.fill",
+                accent: Color.orange
+            )
+        case 700..<800:
+            return DailyStatusInfo(
+                subtitle: "不可阻挡，继续冲刺更高峰！",
+                badge: "不可阻挡 🛡️",
+                icon: "shield.fill",
+                accent: Color.indigo
+            )
+        case 800..<900:
+            return DailyStatusInfo(
+                subtitle: "战意高涨，今日战绩显赫！",
+                badge: "战意高涨 ⚔️",
+                icon: "hammer.fill",
+                accent: Color.teal
+            )
+        case 900..<1000:
+            return DailyStatusInfo(
+                subtitle: "传奇状态达成！你是词场主角！",
+                badge: "传奇状态 🏅",
+                icon: "crown.fill",
+                accent: Color.yellow
+            )
+        default:
+            return DailyStatusInfo(
+                subtitle: "今日葫芦王非你莫属！\(wordsToday) 个单词达成！",
+                badge: "今日葫芦王 👑",
+                icon: "star.circle.fill",
+                accent: Color(red: 0.85, green: 0.6, blue: 0.1)
+            )
         }
     }
 
@@ -1078,108 +1144,197 @@ private struct NameEditorView: View {
     }
 }
 
-private struct ProfileActionButton: View {
-    enum Style {
-        case accent
-        case plain
-        case destructive
+private struct RecycleBinView: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var bookStore: WordBookStore
+    @State private var itemPendingPermanentDelete: TrashedWordSection?
 
-        var background: Color {
-            switch self {
-            case .accent: return Color.accentColor.opacity(0.12)
-            case .plain: return Color(.systemGray6)
-            case .destructive: return Color.red.opacity(0.12)
-            }
-        }
-
-        var foreground: Color {
-            switch self {
-            case .accent: return Color.accentColor
-            case .plain: return Color.primary
-            case .destructive: return Color.red
-            }
-        }
-    }
-
-    let title: String
-    let subtitle: String
-    let systemImage: String?
-    let style: Style
-    let customIcon: AnyView?
-    let action: () -> Void
-
-    init(
-        title: String,
-        subtitle: String,
-        systemImage: String? = nil,
-        style: Style,
-        customIcon: AnyView? = nil,
-        action: @escaping () -> Void
-    ) {
-        self.title = title
-        self.subtitle = subtitle
-        self.systemImage = systemImage
-        self.style = style
-        self.customIcon = customIcon
-        self.action = action
+    private var sortedTrash: [TrashedWordSection] {
+        bookStore.trashedSections.sorted { $0.deletedAt > $1.deletedAt }
     }
 
     var body: some View {
-        Button {
-            triggerHaptic()
-            action()
-        } label: {
-            HStack(spacing: 16) {
-                iconView
-                    .frame(width: 44, height: 44)
-                    .background(Circle().fill(style.background))
-                    .foregroundStyle(style.foreground)
+        NavigationStack {
+            Group {
+                if sortedTrash.isEmpty {
+                    emptyState
+                } else {
+                    ScrollView(showsIndicators: false) {
+                        VStack(alignment: .leading, spacing: 18) {
+                            Text("最近删除的词书")
+                                .font(.headline)
+                            Text("词书会在回收站中保留 30 天，过期后会自动清除。")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
 
+                            ForEach(sortedTrash) { item in
+                                RecycleBinItemCard(
+                                    item: item,
+                                    onRestore: {
+                                        Haptic.trigger(.medium)
+                                        bookStore.restoreFromTrash(item)
+                                    },
+                                    onDelete: {
+                                        Haptic.trigger(.light)
+                                        itemPendingPermanentDelete = item
+                                    }
+                                )
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 20)
+                        .padding(.top, 24)
+                        .padding(.bottom, 32)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .background(Color(.systemGroupedBackground).ignoresSafeArea())
+            .navigationTitle("回收站")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("关闭") {
+                        Haptic.trigger(.light)
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .onAppear {
+            bookStore.purgeExpiredTrashIfNeeded()
+        }
+        .alert(item: $itemPendingPermanentDelete) { item in
+            Alert(
+                title: Text("彻底删除词书？"),
+                message: Text("“\(item.section.title)” 将被永久删除，无法恢复。"),
+                primaryButton: .destructive(Text("彻底删除")) {
+                    Haptic.trigger(.heavy)
+                    bookStore.permanentlyDeleteFromTrash(item)
+                },
+                secondaryButton: .cancel {
+                    Haptic.trigger(.light)
+                }
+            )
+        }
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "trash.circle")
+                .font(.system(size: 52))
+                .foregroundStyle(.secondary)
+            Text("回收站为空")
+                .font(.headline)
+            Text("删除的词书会在这里保留 30 天，可随时恢复。")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.top, 72)
+    }
+}
+
+private struct RecycleBinItemCard: View {
+    let item: TrashedWordSection
+    let onRestore: () -> Void
+    let onDelete: () -> Void
+
+    private var remainingText: String {
+        let days = item.daysRemaining()
+        return days > 0 ? "剩余 \(days) 天" : "不足 1 天"
+    }
+
+    private var remainingColor: Color {
+        let days = item.daysRemaining()
+        if days <= 1 { return .red }
+        if days <= 3 { return .orange }
+        return .secondary
+    }
+
+    private var detailText: String {
+        let wordCount = item.section.words.count
+        let relative = item.deletedAt.formatted(.relative(presentation: .named, unitsStyle: .wide))
+        return "共 \(wordCount) 个单词 · \(relative) 移入回收站"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(title)
-                        .font(.headline)
-                    Text(subtitle)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                    Text(item.section.title)
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.primary)
+                    if let subtitle = item.section.subtitle, !subtitle.isEmpty {
+                        Text(subtitle)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 Spacer()
 
-                Image(systemName: "chevron.right")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(.tertiary)
+                Text(remainingText)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(remainingColor)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(
+                        Capsule()
+                            .fill(remainingColor.opacity(0.12))
+                    )
             }
-            .padding()
-            .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color(.systemBackground))
-            )
-            .shadow(color: .black.opacity(0.04), radius: 6, x: 0, y: 4)
-        }
-        .buttonStyle(.plain)
-    }
 
-    private func triggerHaptic() {
-        switch style {
-        case .accent:
-            Haptic.trigger(.medium)
-        case .plain:
-            Haptic.trigger(.light)
-        case .destructive:
-            Haptic.trigger(.heavy)
-        }
-    }
+            Text(detailText)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
 
-    @ViewBuilder
-    private var iconView: some View {
-        if let customIcon {
-            customIcon
-        } else if let systemImage {
-            Image(systemName: systemImage)
-                .font(.system(size: 20, weight: .semibold))
-        } else {
-            EmptyView()
+            Text("自动清除：\(item.expirationDate().formatted(.dateTime.year().month().day()))")
+                .font(.footnote)
+                .foregroundStyle(.tertiary)
+
+            HStack {
+                Button {
+                    onRestore()
+                } label: {
+                    Text("恢复")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 10)
+                        .background(
+                            Capsule()
+                                .fill(appTealColor)
+                        )
+                }
+                .buttonStyle(.plain)
+
+                Spacer(minLength: 12)
+
+                Button(role: .destructive) {
+                    onDelete()
+                } label: {
+                    Text("彻底删除")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.red)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 10)
+                        .background(
+                            Capsule()
+                                .fill(Color.red.opacity(0.1))
+                        )
+                }
+                .buttonStyle(.plain)
+            }
         }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color(.systemBackground))
+                .shadow(color: .black.opacity(0.06), radius: 12, x: 0, y: 8)
+        )
     }
 }
 
@@ -1208,7 +1363,7 @@ private struct ProfileSummaryChip: View {
 private struct ProfileInfoCard: View {
     let title: String
     let subtitle: String
-    let badge: String
+    let badge: String?
     let systemImage: String
     let accent: Color
 
@@ -1219,15 +1374,17 @@ private struct ProfileInfoCard: View {
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundColor(.primary)
                 Spacer()
-                Text(badge)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(accent)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(
-                        Capsule()
-                            .fill(accent.opacity(0.12))
-                    )
+                if let badge, !badge.isEmpty {
+                    Text(badge)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(accent)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(
+                            Capsule()
+                                .fill(accent.opacity(0.12))
+                        )
+                }
             }
 
             HStack(alignment: .top, spacing: 14) {
@@ -1718,10 +1875,49 @@ private struct CustomPieSmallSlice: Shape {
     }
 }
 
+struct TrashedWordSection: Identifiable, Codable {
+    let section: WordSection
+    let deletedAt: Date
+
+    var id: UUID { section.id }
+
+    func expirationDate(retentionInterval: TimeInterval = recycleBinRetentionInterval) -> Date {
+        deletedAt.addingTimeInterval(retentionInterval)
+    }
+
+    func daysRemaining(
+        from referenceDate: Date = Date(),
+        retentionInterval: TimeInterval = recycleBinRetentionInterval
+    ) -> Int {
+        let expiration = expirationDate(retentionInterval: retentionInterval)
+        guard expiration > referenceDate else { return 0 }
+        let components = Calendar.current.dateComponents([.day], from: referenceDate, to: expiration)
+        return max(0, components.day ?? 0)
+    }
+
+    func isExpired(
+        asOf date: Date = Date(),
+        retentionInterval: TimeInterval = recycleBinRetentionInterval
+    ) -> Bool {
+        date >= expirationDate(retentionInterval: retentionInterval)
+    }
+}
+
 final class WordBookStore: ObservableObject {
     @Published private(set) var sections: [WordSection] = []
+    @Published private(set) var trashedSections: [TrashedWordSection] = []
 
     private let storageURL: URL
+
+    private struct PersistedState: Codable {
+        var sections: [WordSection]
+        var trashedSections: [TrashedWordSection]
+
+        init(sections: [WordSection], trashedSections: [TrashedWordSection]) {
+            self.sections = sections
+            self.trashedSections = trashedSections
+        }
+    }
 
     init(userId: String, fileManager: FileManager = .default) {
         let directory = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
@@ -1755,22 +1951,63 @@ final class WordBookStore: ObservableObject {
         save()
     }
 
-    func deleteSection(_ section: WordSection) {
+    func deleteSection(_ section: WordSection, deletedAt: Date = Date()) {
         sections.removeAll { $0.id == section.id }
+        trashedSections.removeAll { $0.id == section.id }
+        trashedSections.append(TrashedWordSection(section: section, deletedAt: deletedAt))
         save()
+    }
+
+    func restoreFromTrash(_ trashed: TrashedWordSection) {
+        guard let index = trashedSections.firstIndex(where: { $0.id == trashed.id }) else { return }
+        let restored = trashedSections.remove(at: index).section
+        sections.append(restored)
+        save()
+    }
+
+    func permanentlyDeleteFromTrash(_ trashed: TrashedWordSection) {
+        trashedSections.removeAll { $0.id == trashed.id }
+        save()
+    }
+
+    func purgeExpiredTrashIfNeeded() {
+        if purgeExpiredTrash() {
+            save()
+        }
+    }
+
+    private func purgeExpiredTrash(referenceDate: Date = Date()) -> Bool {
+        let originalCount = trashedSections.count
+        trashedSections.removeAll { $0.isExpired(asOf: referenceDate) }
+        return trashedSections.count != originalCount
     }
 
     private func load() {
         var loadedFromDisk = false
-        if let data = try? Data(contentsOf: storageURL),
-           let decoded = try? JSONDecoder().decode([WordSection].self, from: data) {
-            sections = decoded
-            loadedFromDisk = true
+        if let data = try? Data(contentsOf: storageURL) {
+            let decoder = JSONDecoder()
+            if let decoded = try? decoder.decode(PersistedState.self, from: data) {
+                sections = decoded.sections
+                trashedSections = decoded.trashedSections
+                loadedFromDisk = true
+            } else if let legacySections = try? decoder.decode([WordSection].self, from: data) {
+                sections = legacySections
+                trashedSections = []
+                loadedFromDisk = true
+            } else {
+                sections = []
+                trashedSections = []
+            }
         } else {
             sections = []
+            trashedSections = []
         }
 
         var needsSave = false
+
+        if purgeExpiredTrash() {
+            needsSave = true
+        }
 
         let originalCount = sections.count
         sections.removeAll { $0.title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "test" }
@@ -1791,7 +2028,9 @@ final class WordBookStore: ObservableObject {
     }
 
     private func save() {
-        guard let data = try? JSONEncoder().encode(sections) else { return }
+        _ = purgeExpiredTrash()
+        let encoder = JSONEncoder()
+        guard let data = try? encoder.encode(PersistedState(sections: sections, trashedSections: trashedSections)) else { return }
         try? data.write(to: storageURL, options: .atomic)
     }
 }
@@ -1900,7 +2139,7 @@ struct ContentView: View {
                 .environmentObject(bookStore)
                 .environmentObject(progressStore)
         }
-        .alert("删除词书", isPresented: Binding(
+        .alert("移至回收站", isPresented: Binding(
             get: { sectionToDelete != nil },
             set: { newValue in
                 if !newValue { sectionToDelete = nil }
@@ -1910,7 +2149,7 @@ struct ContentView: View {
                 Haptic.trigger(.light)
                 sectionToDelete = nil
             }
-            Button("删除", role: .destructive) {
+            Button("移至回收站", role: .destructive) {
                 Haptic.trigger(.heavy)
                 if let target = sectionToDelete {
                     hideState.remove(entries: target.words)
@@ -1920,7 +2159,7 @@ struct ContentView: View {
                 sectionToDelete = nil
             }
         } message: {
-            Text("删除后将无法恢复，确认删除？")
+            Text("词书将移动到回收站，30 天内可恢复，逾期将自动清除。")
         }
     }
 
@@ -2384,7 +2623,7 @@ private struct SectionCardView: View {
                     Circle()
                         .fill(Color.red.opacity(0.1))
                 )
-                .accessibilityLabel("删除词书")
+                .accessibilityLabel("移至回收站")
                 Image(systemName: "chevron.right")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
