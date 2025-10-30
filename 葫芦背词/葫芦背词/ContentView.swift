@@ -3157,9 +3157,21 @@ private struct AddSectionSheet: View {
                     }
 
                     Section("单词列表") {
-                        TextField("搜索单词", text: $searchText)
-                            .textInputAutocapitalization(.never)
-                            .disableAutocorrection(true)
+                        HStack(spacing: 10) {
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(appTealColor)
+
+                            TextField("搜索单词", text: $searchText)
+                                .textInputAutocapitalization(.never)
+                                .disableAutocorrection(true)
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .fill(Color(.systemGray6))
+                        )
 
                         let filteredEntries = searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                             ? entries
