@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct SignInView: View {
     @EnvironmentObject private var sessionStore: AuthSessionStore
@@ -62,7 +63,9 @@ struct SignInView: View {
                 clearError(resetSuccess: true)
                 persistEmailIfNeeded(newValue)
             }
-            .onChange(of: otpCode) { _, _ in clearError() }
+            .onChange(of: otpCode) {
+                clearError()
+            }
             .onChange(of: rememberAccount) { _, newValue in
                 updateRememberChoice(newValue)
             }
@@ -103,9 +106,7 @@ struct SignInView: View {
                     code: $otpCode,
                     isSending: isSendingCode,
                     canSend: !trimmedEmail.isEmpty && !isSendingCode,
-                    onSend: {
-                        Task { await sendEmailCode() }
-                    }
+                    onSend: { Task { await sendEmailCode() } }
                 )
 
                 Text("验证码将发送至您的邮箱，请在 10 分钟内输入。")
@@ -228,19 +229,28 @@ private struct LabeledInputField: View {
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(.black.opacity(0.6))
 
-            TextField(label, text: $text)
-                .font(.system(size: 16, weight: .medium))
-                .padding(.vertical, 12)
-                .padding(.horizontal, 16)
-                .background(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(Color(red: 0.93, green: 0.99, blue: 0.94))
-                        .opacity(0.75)
-                )
-                .keyboardType(keyboardType)
-                .textContentType(textContentType)
-                .textInputAutocapitalization(.never)
-                .disableAutocorrection(true)
+            field
+        }
+    }
+
+    @ViewBuilder
+    private var field: some View {
+        let base = TextField(label, text: $text)
+            .font(.system(size: 16, weight: .medium))
+            .padding(.vertical, 12)
+            .padding(.horizontal, 16)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Color(red: 0.93, green: 0.99, blue: 0.94).opacity(0.75))
+            )
+            .keyboardType(keyboardType)
+            .textInputAutocapitalization(.never)
+            .disableAutocorrection(true)
+
+        if let textContentType {
+            base.textContentType(textContentType)
+        } else {
+            base
         }
     }
 }
@@ -263,8 +273,7 @@ private struct OTPInputRow: View {
                 .padding(.horizontal, 16)
                 .background(
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(Color(red: 0.93, green: 0.99, blue: 0.94))
-                        .opacity(0.75)
+                        .fill(Color(red: 0.93, green: 0.99, blue: 0.94).opacity(0.75))
                 )
 
             Button {
@@ -273,8 +282,7 @@ private struct OTPInputRow: View {
             } label: {
                 ZStack {
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(Color(red: 0.78, green: 0.95, blue: 0.84))
-                        .opacity(0.75)
+                        .fill(Color(red: 0.78, green: 0.95, blue: 0.84).opacity(0.75))
                         .frame(width: 112, height: 44)
 
                     if isSending {
@@ -333,18 +341,5 @@ private struct RememberRow: View {
 
             Spacer()
         }
-    }
-}
-
-private struct NotebookBannerShape: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.move(to: CGPoint(x: 0, y: 0))
-        path.addLine(to: CGPoint(x: rect.width, y: 0))
-        path.addLine(to: CGPoint(x: rect.width * 0.85, y: rect.height * 0.85))
-        path.addLine(to: CGPoint(x: rect.width * 0.45, y: rect.height))
-        path.addLine(to: CGPoint(x: rect.width * 0.05, y: rect.height * 0.85))
-        path.closeSubpath()
-        return path
     }
 }

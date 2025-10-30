@@ -8,6 +8,8 @@
 import SwiftUI
 import Foundation
 import UIKit
+import PhotosUI
+import PhotosUI
 
 private let wordsPerPage = 10
 private let appTealColor = Color(red: 0.27, green: 0.63, blue: 0.55) // 湖绿色 #45A08C
@@ -634,6 +636,8 @@ private struct ProfileCenterView: View {
     @State private var showingNameEditor = false
     @State private var editingName = ""
     @State private var showingSettingsDialog = false
+    @State private var showPhotoPicker = false
+    @State private var photoPickerItem: PhotosPickerItem?
 
     private let emojiOptions = ["🎓", "📚", "✏️", "📖", "🌟", "💡", "🚀", "🎯", "🏆", "💪", "🔥", "⚡️", "🌈", "🎨", "🎭", "🎪"]
 
@@ -683,9 +687,20 @@ private struct ProfileCenterView: View {
                 editingName = userProfile.userName
                 showingNameEditor = true
             }
-            Button("更换头像") {
+            Button("从相册选择头像") {
+                Haptic.trigger(.light)
+                showPhotoPicker = true
+            }
+            Button("选择表情头像") {
                 Haptic.trigger(.light)
                 showingEmojiPicker = true
+                userProfile.avatarImageData = nil
+            }
+            if userProfile.avatarImageData != nil {
+                Button("恢复默认表情", role: .destructive) {
+                    Haptic.trigger(.light)
+                    userProfile.avatarImageData = nil
+                }
             }
             if let email = sessionStore.session?.email {
                 Button("复制邮箱") {
@@ -698,7 +713,8 @@ private struct ProfileCenterView: View {
             EmojiPickerView(
                 selectedEmoji: $userProfile.avatarEmoji,
                 emojis: emojiOptions,
-                isPresented: $showingEmojiPicker
+                isPresented: $showingEmojiPicker,
+                onSelect: { _ in userProfile.avatarImageData = nil }
             )
             .presentationDetents([.height(300)])
         }
@@ -712,23 +728,17 @@ private struct ProfileCenterView: View {
             )
             .presentationDetents([.height(200)])
         }
+        .photosPicker(isPresented: $showPhotoPicker, selection: $photoPickerItem, matching: .images)
+        .onChange(of: photoPickerItem) { _, newItem in
+            guard let newItem else { return }
+            Task { await loadPhoto(from: newItem) }
+        }
     }
 
     private var headerCard: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(alignment: .top) {
-                Button {
-                    Haptic.trigger(.light)
-                    showingEmojiPicker = true
-                } label: {
-                    Text(userProfile.avatarEmoji)
-                        .font(.system(size: 52))
-                        .frame(width: 86, height: 86)
-                        .background(
-                            Circle()
-                                .fill(Color(.systemGray6))
-                        )
-                }
+                avatarSelector
 
                 VStack(alignment: .leading, spacing: 8) {
                     Button {
@@ -800,6 +810,52 @@ private struct ProfileCenterView: View {
                 .fill(Color(.systemBackground))
                 .shadow(color: .black.opacity(0.06), radius: 16, x: 0, y: 12)
         )
+    }
+
+    private var avatarSelector: some View {
+        Menu {
+            Button("从相册选择头像") {
+                Haptic.trigger(.light)
+                showPhotoPicker = true
+            }
+            Button("选择表情头像") {
+                Haptic.trigger(.light)
+                showingEmojiPicker = true
+                userProfile.avatarImageData = nil
+            }
+            if userProfile.avatarImageData != nil {
+                Button("恢复默认表情", role: .destructive) {
+                    Haptic.trigger(.light)
+                    userProfile.avatarImageData = nil
+                }
+            }
+        } label: {
+            avatarDisplay
+        }
+        .menuStyle(.button)
+    }
+
+    private var avatarDisplay: some View {
+        ZStack {
+            if let data = userProfile.avatarImageData,
+               let uiImage = UIImage(data: data) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Text(userProfile.avatarEmoji)
+                    .font(.system(size: 52))
+                    .frame(width: 86, height: 86)
+            }
+        }
+        .frame(width: 86, height: 86)
+        .background(Circle().fill(Color(.systemGray6)))
+        .clipShape(Circle())
+        .overlay(
+            Circle()
+                .strokeBorder(Color.white.opacity(0.35), lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 4)
     }
 
     private var dailyStatusCard: some View {
@@ -910,12 +966,42 @@ private struct ProfileCenterView: View {
         let state = progressStore.progress(for: section.id)
         return state.completedPasses * 10_000 + state.completedPages
     }
+
+    private func loadPhoto(from item: PhotosPickerItem) async {
+        do {
+            if let data = try await item.loadTransferable(type: Data.self),
+               let processed = normalizedImageData(from: data) {
+                await MainActor.run {
+                    userProfile.avatarImageData = processed
+                }
+            }
+        } catch {
+            // Ignore errors for now
+        }
+        await MainActor.run {
+            photoPickerItem = nil
+        }
+    }
+
+    private func normalizedImageData(from data: Data) -> Data? {
+        guard let image = UIImage(data: data) else { return nil }
+        let maxDimension: CGFloat = 320
+        let maxSide = max(image.size.width, image.size.height)
+        let scale = maxSide > maxDimension ? maxDimension / maxSide : 1
+        let newSize = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+        let renderer = UIGraphicsImageRenderer(size: newSize)
+        let resized = renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: newSize))
+        }
+        return resized.jpegData(compressionQuality: 0.85)
+    }
 }
 
 private struct EmojiPickerView: View {
     @Binding var selectedEmoji: String
     let emojis: [String]
     @Binding var isPresented: Bool
+    var onSelect: (String) -> Void = { _ in }
 
     var body: some View {
         VStack(spacing: 20) {
@@ -928,6 +1014,7 @@ private struct EmojiPickerView: View {
                     Button {
                         Haptic.trigger(.medium)
                         selectedEmoji = emoji
+                        onSelect(emoji)
                         isPresented = false
                     } label: {
                         Text(emoji)
@@ -3843,16 +3930,23 @@ final class UserProfileStore: ObservableObject {
         didSet { persist() }
     }
 
+    @Published var avatarImageData: Data? {
+        didSet { persist() }
+    }
+
     private let defaults: UserDefaults
     private let nameKey: String
     private let emojiKey: String
+    private let imageKey: String
     private static let legacyNameKey = "UserProfileStore.name"
     private static let legacyEmojiKey = "UserProfileStore.emoji"
+    private static let legacyImageKey = "UserProfileStore.avatarImage"
 
     init(userId: String, userDefaults: UserDefaults = .standard) {
         self.defaults = userDefaults
         self.nameKey = namespacedKey(Self.legacyNameKey, userId: userId)
         self.emojiKey = namespacedKey(Self.legacyEmojiKey, userId: userId)
+        self.imageKey = namespacedKey(Self.legacyImageKey, userId: userId)
 
         var migrated = false
 
@@ -3876,6 +3970,16 @@ final class UserProfileStore: ObservableObject {
             self.avatarEmoji = "🎓"
         }
 
+        if let storedImage = userDefaults.data(forKey: imageKey) {
+            self.avatarImageData = storedImage
+        } else if let legacyImage = userDefaults.data(forKey: Self.legacyImageKey) {
+            self.avatarImageData = legacyImage
+            migrated = true
+            defaults.removeObject(forKey: Self.legacyImageKey)
+        } else {
+            self.avatarImageData = nil
+        }
+
         if migrated {
             persist()
         }
@@ -3884,6 +3988,11 @@ final class UserProfileStore: ObservableObject {
     private func persist() {
         defaults.set(userName, forKey: nameKey)
         defaults.set(avatarEmoji, forKey: emojiKey)
+        if let data = avatarImageData {
+            defaults.set(data, forKey: imageKey)
+        } else {
+            defaults.removeObject(forKey: imageKey)
+        }
     }
 }
 
