@@ -16,6 +16,8 @@ struct SignInView: View {
     @State private var errorMessage: String?
     @State private var successMessage: String?
     @State private var emailValidationActivated = false
+    @State private var resendCountdown: Int = 0
+    @State private var countdownTimer: Timer?
 
     private static let rememberKey = "HuluBeici.Login.remember"
     private static let emailKey = "HuluBeici.Login.email"
@@ -82,6 +84,9 @@ struct SignInView: View {
                 updateRememberChoice(newValue)
             }
             .navigationBarHidden(true)
+            .onDisappear {
+                stopResendCooldown()
+            }
         }
     }
 
@@ -123,7 +128,8 @@ struct SignInView: View {
                 OTPInputRow(
                     code: $otpCode,
                     isSending: isSendingCode,
-                    canSend: sanitizedEmailValue != nil && !isSendingCode,
+                    canSend: canSendOTPCode,
+                    remainingSeconds: resendCountdown,
                     onSend: { Task { await sendEmailCode() } }
                 )
 
@@ -204,6 +210,14 @@ struct SignInView: View {
         return error.errorDescription
     }
 
+    private var isCooldownActive: Bool {
+        resendCountdown > 0
+    }
+
+    private var canSendOTPCode: Bool {
+        sanitizedEmailValue != nil && !isSendingCode && !isCooldownActive
+    }
+
     private var isFormValid: Bool {
         sanitizedEmailValue != nil && !trimmedOTPCode.isEmpty
     }
@@ -233,6 +247,7 @@ struct SignInView: View {
 
     private func sendEmailCode() async {
         guard !isSendingCode else { return }
+        guard !isCooldownActive else { return }
         emailValidationActivated = true
         guard let sanitizedEmail = sanitizedEmailValue else {
             errorMessage = emailValidationError?.errorDescription ?? "请输入有效的邮箱地址。"
@@ -247,6 +262,7 @@ struct SignInView: View {
             try await sessionStore.requestEmailOTP(email: sanitizedEmail)
             successMessage = "验证码已发送至邮箱，请查收。"
             errorMessage = nil
+            startResendCooldown()
         } catch {
             successMessage = nil
             if let localized = error as? LocalizedError, let description = localized.errorDescription {
@@ -292,6 +308,30 @@ struct SignInView: View {
 
     private var trimmedOTPCode: String {
         otpCode.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func startResendCooldown(_ seconds: Int = 60) {
+        stopResendCooldown()
+        guard seconds > 0 else { return }
+        resendCountdown = seconds
+        let timer = Timer(timeInterval: 1, repeats: true) { timer in
+            if self.resendCountdown <= 1 {
+                timer.invalidate()
+                self.countdownTimer = nil
+                self.resendCountdown = 0
+            } else {
+                self.resendCountdown -= 1
+            }
+        }
+        timer.tolerance = 0.2
+        countdownTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    private func stopResendCooldown() {
+        countdownTimer?.invalidate()
+        countdownTimer = nil
+        resendCountdown = 0
     }
 }
 
@@ -349,6 +389,7 @@ private struct OTPInputRow: View {
     @Binding var code: String
     let isSending: Bool
     let canSend: Bool
+    let remainingSeconds: Int
     let onSend: () -> Void
     @Environment(\.colorScheme) private var colorScheme
 
@@ -371,9 +412,10 @@ private struct OTPInputRow: View {
                 guard canSend else { return }
                 onSend()
             } label: {
+                let state = buttonState
                 ZStack {
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(sendButtonBackgroundColor)
+                        .fill(sendButtonBackgroundColor.opacity(state.opacity))
                         .frame(width: 112, height: 44)
 
                     if isSending {
@@ -384,10 +426,10 @@ private struct OTPInputRow: View {
                         HStack(spacing: 6) {
                             Image(systemName: "paperplane.fill")
                                 .font(.system(size: 14, weight: .semibold))
-                            Text("发送验证码")
+                            Text(state.title)
                                 .font(.system(size: 13, weight: .semibold))
                         }
-                        .foregroundColor(sendButtonForegroundColor)
+                        .foregroundColor(sendButtonForegroundColor.opacity(state.opacity))
                     }
                 }
             }
@@ -406,13 +448,27 @@ private struct OTPInputRow: View {
 
     private var sendButtonBackgroundColor: Color {
         if colorScheme == .dark {
-            return signInPrimaryAccent.opacity(0.25)
+            return signInPrimaryAccent.opacity(0.6)
         }
         return Color(red: 0.78, green: 0.95, blue: 0.84).opacity(0.75)
     }
 
     private var sendButtonForegroundColor: Color {
-        colorScheme == .dark ? signInPrimaryAccent : signInPrimaryAccent
+        colorScheme == .dark ? Color.white : signInPrimaryAccent
+    }
+
+    private var buttonState: (title: String, opacity: Double) {
+        let isCooldown = remainingSeconds > 0
+        let visualOpacity: Double
+        if canSend || isSending {
+            visualOpacity = 1
+        } else if isCooldown {
+            visualOpacity = 0.65
+        } else {
+            visualOpacity = 0.4
+        }
+        let title = isCooldown ? "重新发送(\(remainingSeconds)s)" : "发送验证码"
+        return (title, visualOpacity)
     }
 }
 
