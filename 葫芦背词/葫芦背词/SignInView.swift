@@ -1,8 +1,12 @@
 import SwiftUI
 import UIKit
 
+private let signInPrimaryAccent = Color(red: 0.06, green: 0.40, blue: 0.29)
+private let signInSecondaryAccent = Color(red: 0.18, green: 0.42, blue: 0.33)
+
 struct SignInView: View {
     @EnvironmentObject private var sessionStore: AuthSessionStore
+    @Environment(\.colorScheme) private var colorScheme
 
     @State private var email: String
     @State private var otpCode: String = ""
@@ -11,25 +15,30 @@ struct SignInView: View {
     @State private var isSendingCode = false
     @State private var errorMessage: String?
     @State private var successMessage: String?
+    @State private var emailValidationActivated = false
 
     private static let rememberKey = "HuluBeici.Login.remember"
     private static let emailKey = "HuluBeici.Login.email"
 
     init() {
         let storedRemember = UserDefaults.standard.object(forKey: Self.rememberKey) as? Bool ?? true
-        let storedEmail = storedRemember ? (UserDefaults.standard.string(forKey: Self.emailKey) ?? "") : ""
+        let storedEmailRaw = storedRemember ? (UserDefaults.standard.string(forKey: Self.emailKey) ?? "") : ""
+        let sanitizedStoredEmail: String
+        if let validated = try? EmailValidator.validate(storedEmailRaw) {
+            sanitizedStoredEmail = validated
+        } else {
+            sanitizedStoredEmail = ""
+            UserDefaults.standard.removeObject(forKey: Self.emailKey)
+        }
         _rememberAccount = State(initialValue: storedRemember)
-        _email = State(initialValue: storedEmail)
+        _email = State(initialValue: sanitizedStoredEmail)
     }
 
     var body: some View {
         NavigationStack {
             ZStack {
                 LinearGradient(
-                    colors: [
-                        Color(red: 1.0, green: 0.99, blue: 0.94),
-                        Color(red: 1.0, green: 0.94, blue: 0.97)
-                    ],
+                    colors: backgroundGradientColors,
                     startPoint: .top,
                     endPoint: .bottom
                 )
@@ -62,6 +71,9 @@ struct SignInView: View {
             .onChange(of: email) { _, newValue in
                 clearError(resetSuccess: true)
                 persistEmailIfNeeded(newValue)
+                if newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    emailValidationActivated = false
+                }
             }
             .onChange(of: otpCode) {
                 clearError()
@@ -77,13 +89,13 @@ struct SignInView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Nice to")
                 .font(.system(size: 28, weight: .heavy))
-                .foregroundColor(Color(red: 0.06, green: 0.40, blue: 0.29))
+                .foregroundColor(headerTitleColor)
             Text("meet you")
                 .font(.system(size: 28, weight: .heavy))
-                .foregroundColor(Color(red: 0.06, green: 0.40, blue: 0.29))
+                .foregroundColor(headerTitleColor)
             Text("Welcome to log in")
                 .font(.system(size: 18, weight: .medium))
-                .foregroundColor(Color(red: 0.18, green: 0.42, blue: 0.33))
+                .foregroundColor(headerSubtitleColor)
                 .padding(.top, 4)
         }
     }
@@ -97,21 +109,27 @@ struct SignInView: View {
                 textContentType: .emailAddress
             )
 
+            if let emailHint = emailValidationMessage {
+                Text(emailHint)
+                    .font(.system(size: 12))
+                    .foregroundColor(.red)
+            }
+
             VStack(alignment: .leading, spacing: 12) {
                 Text("验证码")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.black.opacity(0.6))
+                    .foregroundColor(formLabelColor)
 
                 OTPInputRow(
                     code: $otpCode,
                     isSending: isSendingCode,
-                    canSend: !trimmedEmail.isEmpty && !isSendingCode,
+                    canSend: sanitizedEmailValue != nil && !isSendingCode,
                     onSend: { Task { await sendEmailCode() } }
                 )
 
                 Text("验证码将发送至您的邮箱，请在 10 分钟内输入。")
                     .font(.system(size: 12))
-                    .foregroundColor(Color.black.opacity(0.45))
+                    .foregroundStyle(.secondary)
             }
 
             RememberRow(isOn: $rememberAccount)
@@ -132,7 +150,7 @@ struct SignInView: View {
                 .foregroundColor(Color.white.opacity(0.95))
                 .background(
                     RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(Color(red: 0.02, green: 0.02, blue: 0.02))
+                        .fill(primaryButtonBackground)
                 )
                 .shadow(color: Color.black.opacity(0.25), radius: 12, x: 0, y: 8)
         }
@@ -140,18 +158,70 @@ struct SignInView: View {
         .buttonStyle(.plain)
     }
 
+    private var backgroundGradientColors: [Color] {
+        if colorScheme == .dark {
+            return [
+                Color(.systemBackground),
+                Color(.secondarySystemBackground)
+            ]
+        }
+        return [
+            Color(red: 1.0, green: 0.99, blue: 0.94),
+            Color(red: 1.0, green: 0.94, blue: 0.97)
+        ]
+    }
+
+    private var headerTitleColor: Color {
+        colorScheme == .dark ? .primary : signInPrimaryAccent
+    }
+
+    private var headerSubtitleColor: Color {
+        colorScheme == .dark ? .secondary : signInSecondaryAccent
+    }
+
+    private var formLabelColor: Color {
+        colorScheme == .dark ? Color.primary.opacity(0.85) : Color.black.opacity(0.6)
+    }
+
+    private var primaryButtonBackground: Color {
+        colorScheme == .dark ? signInPrimaryAccent : Color(red: 0.02, green: 0.02, blue: 0.02)
+    }
+
+    private var sanitizedEmailValue: String? {
+        try? EmailValidator.validate(email)
+    }
+
+    private var emailValidationError: EmailValidator.ValidationError? {
+        EmailValidator.validationError(for: email)
+    }
+
+    private var emailValidationMessage: String? {
+        let trimmed = trimmedEmail
+        guard !trimmed.isEmpty else { return nil }
+        let shouldShowHint = emailValidationActivated || trimmed.contains("@")
+        guard shouldShowHint else { return nil }
+        guard let error = emailValidationError, error != .empty else { return nil }
+        return error.errorDescription
+    }
+
     private var isFormValid: Bool {
-        !trimmedEmail.isEmpty && !trimmedOTPCode.isEmpty
+        sanitizedEmailValue != nil && !trimmedOTPCode.isEmpty
     }
 
     private func attemptSignIn() async {
         guard !isLoading else { return }
+        emailValidationActivated = true
+        guard let sanitizedEmail = sanitizedEmailValue else {
+            errorMessage = emailValidationError?.errorDescription ?? "请输入有效的邮箱地址。"
+            successMessage = nil
+            return
+        }
         clearError(resetSuccess: true)
         isLoading = true
         defer { isLoading = false }
 
         do {
-            try await sessionStore.signInWithEmailOTP(email: email, code: otpCode)
+            try await sessionStore.signInWithEmailOTP(email: sanitizedEmail, code: otpCode)
         } catch {
             if let localized = error as? LocalizedError, let description = localized.errorDescription {
                 errorMessage = description
@@ -163,9 +233,9 @@ struct SignInView: View {
 
     private func sendEmailCode() async {
         guard !isSendingCode else { return }
-        let sanitizedEmail = trimmedEmail
-        guard !sanitizedEmail.isEmpty else {
-            errorMessage = "请输入邮箱地址。"
+        emailValidationActivated = true
+        guard let sanitizedEmail = sanitizedEmailValue else {
+            errorMessage = emailValidationError?.errorDescription ?? "请输入有效的邮箱地址。"
             successMessage = nil
             return
         }
@@ -196,13 +266,21 @@ struct SignInView: View {
 
     private func persistEmailIfNeeded(_ value: String) {
         guard rememberAccount else { return }
-        UserDefaults.standard.set(value, forKey: Self.emailKey)
+        if let sanitized = try? EmailValidator.validate(value) {
+            UserDefaults.standard.set(sanitized, forKey: Self.emailKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: Self.emailKey)
+        }
     }
 
     private func updateRememberChoice(_ value: Bool) {
         UserDefaults.standard.set(value, forKey: Self.rememberKey)
         if value {
-            UserDefaults.standard.set(email, forKey: Self.emailKey)
+            if let sanitized = sanitizedEmailValue {
+                UserDefaults.standard.set(sanitized, forKey: Self.emailKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: Self.emailKey)
+            }
         } else {
             UserDefaults.standard.removeObject(forKey: Self.emailKey)
         }
@@ -222,12 +300,13 @@ private struct LabeledInputField: View {
     @Binding var text: String
     var keyboardType: UIKeyboardType = .default
     var textContentType: UITextContentType? = nil
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(label)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(.black.opacity(0.6))
+                .foregroundColor(labelColor)
 
             field
         }
@@ -241,7 +320,7 @@ private struct LabeledInputField: View {
             .padding(.horizontal, 16)
             .background(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color(red: 0.93, green: 0.99, blue: 0.94).opacity(0.75))
+                    .fill(fieldBackgroundColor)
             )
             .keyboardType(keyboardType)
             .textInputAutocapitalization(.never)
@@ -253,6 +332,17 @@ private struct LabeledInputField: View {
             base
         }
     }
+
+    private var labelColor: Color {
+        colorScheme == .dark ? Color.primary.opacity(0.85) : Color.black.opacity(0.6)
+    }
+
+    private var fieldBackgroundColor: Color {
+        if colorScheme == .dark {
+            return Color(.secondarySystemBackground)
+        }
+        return Color(red: 0.93, green: 0.99, blue: 0.94).opacity(0.85)
+    }
 }
 
 private struct OTPInputRow: View {
@@ -260,6 +350,7 @@ private struct OTPInputRow: View {
     let isSending: Bool
     let canSend: Bool
     let onSend: () -> Void
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         HStack(spacing: 12) {
@@ -273,7 +364,7 @@ private struct OTPInputRow: View {
                 .padding(.horizontal, 16)
                 .background(
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(Color(red: 0.93, green: 0.99, blue: 0.94).opacity(0.75))
+                        .fill(inputFieldBackgroundColor)
                 )
 
             Button {
@@ -282,13 +373,13 @@ private struct OTPInputRow: View {
             } label: {
                 ZStack {
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(Color(red: 0.78, green: 0.95, blue: 0.84).opacity(0.75))
+                        .fill(sendButtonBackgroundColor)
                         .frame(width: 112, height: 44)
 
                     if isSending {
                         ProgressView()
                             .progressViewStyle(.circular)
-                            .tint(Color(red: 0.06, green: 0.40, blue: 0.29))
+                            .tint(signInPrimaryAccent)
                     } else {
                         HStack(spacing: 6) {
                             Image(systemName: "paperplane.fill")
@@ -296,7 +387,7 @@ private struct OTPInputRow: View {
                             Text("发送验证码")
                                 .font(.system(size: 13, weight: .semibold))
                         }
-                        .foregroundColor(Color(red: 0.06, green: 0.40, blue: 0.29))
+                        .foregroundColor(sendButtonForegroundColor)
                     }
                 }
             }
@@ -305,10 +396,29 @@ private struct OTPInputRow: View {
             .animation(.easeInOut(duration: 0.2), value: isSending)
         }
     }
+
+    private var inputFieldBackgroundColor: Color {
+        if colorScheme == .dark {
+            return Color(.secondarySystemBackground)
+        }
+        return Color(red: 0.93, green: 0.99, blue: 0.94).opacity(0.85)
+    }
+
+    private var sendButtonBackgroundColor: Color {
+        if colorScheme == .dark {
+            return signInPrimaryAccent.opacity(0.25)
+        }
+        return Color(red: 0.78, green: 0.95, blue: 0.84).opacity(0.75)
+    }
+
+    private var sendButtonForegroundColor: Color {
+        colorScheme == .dark ? signInPrimaryAccent : signInPrimaryAccent
+    }
 }
 
 private struct RememberRow: View {
     @Binding var isOn: Bool
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         HStack(spacing: 10) {
@@ -318,28 +428,43 @@ private struct RememberRow: View {
                 HStack(spacing: 6) {
                     ZStack {
                         RoundedRectangle(cornerRadius: 5, style: .continuous)
-                            .stroke(Color.black.opacity(0.3), lineWidth: 1)
+                            .stroke(checkboxBorderColor, lineWidth: 1)
                             .background(
                                 RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                    .fill(isOn ? Color(red: 0.69, green: 0.95, blue: 0.78) : Color.white)
+                                    .fill(checkboxFillColor)
                             )
                             .frame(width: 18, height: 18)
 
                         if isOn {
                             Image(systemName: "checkmark")
                                 .font(.system(size: 11, weight: .bold))
-                                .foregroundColor(Color(red: 0.06, green: 0.40, blue: 0.29))
+                                .foregroundColor(signInPrimaryAccent)
                         }
                     }
 
                     Text("记住邮箱")
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(Color.black.opacity(0.7))
+                        .foregroundColor(rememberTextColor)
                 }
             }
             .buttonStyle(.plain)
 
             Spacer()
         }
+    }
+
+    private var checkboxBorderColor: Color {
+        colorScheme == .dark ? Color(.separator) : Color.black.opacity(0.3)
+    }
+
+    private var checkboxFillColor: Color {
+        if colorScheme == .dark {
+            return isOn ? signInPrimaryAccent.opacity(0.25) : Color(.systemBackground)
+        }
+        return isOn ? Color(red: 0.69, green: 0.95, blue: 0.78) : Color.white
+    }
+
+    private var rememberTextColor: Color {
+        colorScheme == .dark ? Color.primary : Color.black.opacity(0.7)
     }
 }

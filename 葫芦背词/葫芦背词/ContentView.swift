@@ -2633,7 +2633,7 @@ private struct SectionCardView: View {
         .padding(.vertical, 18)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.white)
+                .fill(Color(.secondarySystemBackground))
         )
         .shadow(color: Color.black.opacity(0.05), radius: 10, x: 0, y: 6)
     }
@@ -2896,7 +2896,7 @@ private struct WordPageView: View {
                         .environmentObject(hideState)
                         .background(
                             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .fill(Color.white)
+                                .fill(Color(.tertiarySystemBackground))
                         )
                         .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 4)
                 }

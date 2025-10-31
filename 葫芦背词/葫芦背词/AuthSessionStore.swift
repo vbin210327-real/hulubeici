@@ -24,7 +24,7 @@ final class AuthSessionStore: ObservableObject {
 
     func signIn(email: String, password: String) async throws {
         lastError = nil
-        let sanitizedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        let sanitizedEmail = try EmailValidator.validate(email)
         let sanitizedPassword = password.trimmingCharacters(in: .whitespacesAndNewlines)
         let newSession = try await authService.signIn(email: sanitizedEmail, password: sanitizedPassword)
         session = newSession
@@ -33,13 +33,14 @@ final class AuthSessionStore: ObservableObject {
 
     func requestEmailOTP(email: String) async throws {
         lastError = nil
-        let sanitizedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        let sanitizedEmail = try EmailValidator.validate(email)
+        try EmailDeliveryGuard.validateDeliveryAllowed()
         try await authService.sendEmailOTP(email: sanitizedEmail)
     }
 
     func signInWithEmailOTP(email: String, code: String) async throws {
         lastError = nil
-        let sanitizedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        let sanitizedEmail = try EmailValidator.validate(email)
         let sanitizedCode = code.trimmingCharacters(in: .whitespacesAndNewlines)
         let newSession = try await authService.signInWithEmailOTP(email: sanitizedEmail, code: sanitizedCode)
         session = newSession
