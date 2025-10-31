@@ -225,11 +225,7 @@ private struct SectionPassesPieChart: View {
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .center)
-        .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color(.systemBackground))
-        )
-        .shadow(color: .black.opacity(0.08), radius: 16, x: 0, y: 10)
+        .cardStyle(cornerRadius: 24)
     }
 }
 
@@ -241,24 +237,28 @@ private struct SectionPickerView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 12) {
                 ForEach(sections) { section in
+                    let isSelected = selectedSection?.id == section.id
                     Button {
                         Haptic.trigger(.light)
                         selectedSection = section
                     } label: {
                         Text(section.title)
-                            .font(.system(size: 15, weight: selectedSection?.id == section.id ? .semibold : .regular))
-                            .foregroundColor(selectedSection?.id == section.id ? .white : .primary)
+                            .font(.system(size: 15, weight: isSelected ? .semibold : .regular))
+                            .foregroundColor(isSelected ? .white : .primary)
                             .padding(.horizontal, 20)
                             .padding(.vertical, 10)
-                            .background(
-                                RoundedRectangle(cornerRadius: 20)
-                                    .fill(selectedSection?.id == section.id ? appTealColor : Color(.systemGray6))
-                            )
+                            .background(tagBackground(isSelected: isSelected))
                     }
                 }
             }
             .padding(.horizontal, 24)
         }
+    }
+
+    @ViewBuilder
+    private func tagBackground(isSelected: Bool) -> some View {
+        RoundedRectangle(cornerRadius: 20, style: .continuous)
+            .fill(isSelected ? appTealColor : Color(UIColor.systemGray5))
     }
 }
 
@@ -388,11 +388,7 @@ private struct MonthlyProgressChart: View {
             }
         }
         .padding(20)
-        .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color(.systemBackground))
-        )
-        .shadow(color: .black.opacity(0.08), radius: 16, x: 0, y: 10)
+        .cardStyle(cornerRadius: 24)
     }
 }
 
@@ -466,12 +462,25 @@ private struct ProgressOverviewView: View {
             .padding(.top, 28)
             .padding(.bottom, 140)
         }
-        .background(Color(.systemGray6))
+        .background(progressBackground)
         .onAppear {
             if selectedSection == nil, let firstSection = bookStore.sections.first {
                 selectedSection = firstSection
             }
         }
+    }
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var progressBackground: some View {
+        Group {
+            if colorScheme == .dark {
+                Color.black
+            } else {
+                Color(UIColor.systemGray6)
+            }
+        }
+        .ignoresSafeArea()
     }
 
     private func moveToMonth(offset: Int) {
@@ -512,59 +521,51 @@ private struct ProgressOverviewView: View {
     }
 
     private var summaryCard: some View {
-        RoundedRectangle(cornerRadius: 24, style: .continuous)
-            .fill(Color(.systemBackground))
-            .overlay(
-                VStack(alignment: .leading, spacing: 20) {
-                    Text("今日学习摘要")
-                        .font(.headline)
+        VStack(alignment: .leading, spacing: 20) {
+            Text("今日学习摘要")
+                .font(.headline)
 
-                    HStack(spacing: 16) {
-                        SummaryStat(
-                            title: "\(studiedWordsTotal)",
-                            subtitle: "已掌握词汇"
-                        )
-                        SummaryStat(
-                            title: "\(completedPassesTotal)/\(max(targetPassesTotal, 1))",
-                            subtitle: "完成遍数"
-                        )
-                        SummaryStat(
-                            title: "\(bookStore.sections.count)",
-                            subtitle: "词书数量"
-                        )
-                    }
+            HStack(spacing: 16) {
+                SummaryStat(
+                    title: "\(studiedWordsTotal)",
+                    subtitle: "已掌握词汇"
+                )
+                SummaryStat(
+                    title: "\(completedPassesTotal)/\(max(targetPassesTotal, 1))",
+                    subtitle: "完成遍数"
+                )
+                SummaryStat(
+                    title: "\(bookStore.sections.count)",
+                    subtitle: "词书数量"
+                )
+            }
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("总体完成度 \(completionRate.formatted(.percent.precision(.fractionLength(0))))")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                        ProgressView(value: completionRate, total: 1)
-                            .tint(appTealColor)
-                    }
-                }
-                .padding(22)
-            )
-            .shadow(color: .black.opacity(0.08), radius: 16, x: 0, y: 10)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("总体完成度 \(completionRate.formatted(.percent.precision(.fractionLength(0))))")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                ProgressView(value: completionRate, total: 1)
+                    .tint(appTealColor)
+            }
+        }
+        .padding(22)
+        .cardStyle(cornerRadius: 24)
     }
 
     private var emptyPlaceholder: some View {
-        RoundedRectangle(cornerRadius: 24, style: .continuous)
-            .fill(Color(.systemBackground))
-            .overlay(
-                VStack(spacing: 12) {
-                    Image(systemName: "chart.bar.doc.horizontal")
-                        .font(.system(size: 36, weight: .regular))
-                        .foregroundStyle(Color.accentColor)
-                    Text("暂无统计数据")
-                        .font(.headline)
-                    Text("在主页添加词书后即可查看复习进度。")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                .multilineTextAlignment(.center)
-                .padding(28)
-            )
-            .shadow(color: .black.opacity(0.08), radius: 16, x: 0, y: 10)
+        VStack(spacing: 12) {
+            Image(systemName: "chart.bar.doc.horizontal")
+                .font(.system(size: 36, weight: .regular))
+                .foregroundStyle(appTealColor)
+            Text("暂无统计数据")
+                .font(.headline)
+            Text("在主页添加词书后即可查看复习进度。")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .multilineTextAlignment(.center)
+        .padding(28)
+        .cardStyle(cornerRadius: 24)
     }
 }
 
@@ -602,11 +603,11 @@ private struct ProgressSectionRow: View {
                 Spacer()
                 Text(completionRatio.formatted(.percent.precision(.fractionLength(0))))
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(appTealColor)
             }
 
             ProgressView(value: completionRatio, total: 1)
-                .tint(Color.accentColor)
+                .tint(appTealColor)
 
             HStack(spacing: 12) {
                 Label("\(studiedWords)/\(section.words.count) 词", systemImage: "book")
@@ -618,11 +619,7 @@ private struct ProgressSectionRow: View {
             }
         }
         .padding(18)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color(.systemBackground))
-        )
-        .shadow(color: .black.opacity(0.08), radius: 12, x: 0, y: 8)
+        .cardStyle(cornerRadius: 20)
     }
 }
 
@@ -632,6 +629,7 @@ private struct ProfileCenterView: View {
     @EnvironmentObject private var progressStore: SectionProgressStore
     @EnvironmentObject private var dailyProgressStore: DailyProgressStore
     @EnvironmentObject private var bookStore: WordBookStore
+    @Environment(\.colorScheme) private var colorScheme
 
     @State private var showingEmojiPicker = false
     @State private var showingNameEditor = false
@@ -662,8 +660,7 @@ private struct ProfileCenterView: View {
                         .padding(.vertical, 16)
                         .background(
                             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                .fill(Color(.systemBackground))
-                                .shadow(color: .black.opacity(0.06), radius: 10, x: 0, y: 6)
+                                .fill(Color.red.opacity(colorScheme == .dark ? 0.25 : 0.1))
                         )
                 }
                 .padding(.top, 12)
@@ -673,15 +670,21 @@ private struct ProfileCenterView: View {
             .padding(.bottom, 80)
         }
         .background(
-            LinearGradient(
-                colors: [
-                    Color(.systemBackground),
-                    Color(.systemGray6)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
+            Group {
+                if colorScheme == .dark {
+                    Color.black.ignoresSafeArea()
+                } else {
+                    LinearGradient(
+                        colors: [
+                            Color(.systemBackground),
+                            Color(.systemGray6)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .ignoresSafeArea()
+                }
+            }
         )
         .confirmationDialog("设置", isPresented: $showingSettingsDialog, titleVisibility: .visible) {
             Button("修改昵称") {
@@ -803,11 +806,7 @@ private struct ProfileCenterView: View {
             }
         }
         .padding(20)
-        .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color(.systemBackground))
-                .shadow(color: .black.opacity(0.06), radius: 16, x: 0, y: 12)
-        )
+        .cardStyle(cornerRadius: 24)
     }
 
     private var avatarSelector: some View {
@@ -1330,11 +1329,7 @@ private struct RecycleBinItemCard: View {
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color(.systemBackground))
-                .shadow(color: .black.opacity(0.06), radius: 12, x: 0, y: 8)
-        )
+        .cardStyle(cornerRadius: 20)
     }
 }
 
@@ -1355,7 +1350,11 @@ private struct ProfileSummaryChip: View {
         .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color(.systemGray6))
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(Color.white.opacity(0.28), lineWidth: 1)
+                )
         )
     }
 }
@@ -1405,11 +1404,7 @@ private struct ProfileInfoCard: View {
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color(.systemBackground))
-                .shadow(color: .black.opacity(0.05), radius: 12, x: 0, y: 10)
-        )
+        .cardStyle(cornerRadius: 24)
     }
 }
 
@@ -2037,6 +2032,7 @@ final class WordBookStore: ObservableObject {
 
 struct ContentView: View {
     @EnvironmentObject private var sessionStore: AuthSessionStore
+    @Environment(\.colorScheme) private var colorScheme
     @StateObject private var bookStore: WordBookStore
     @State private var showingAddSection = false
     @State private var sectionToDelete: WordSection?
@@ -2231,6 +2227,7 @@ struct ContentView: View {
             .padding(.top, 28)
             .padding(.bottom, 220)
         }
+        .background(homeBackground)
     }
 
     private var headerView: some View {
@@ -2243,6 +2240,37 @@ struct ContentView: View {
             Spacer()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var homeBackground: some View {
+        let base = colorScheme == .dark
+            ? Color.black
+            : Color(UIColor.systemGray6)
+        let gradientColors: [Color] = colorScheme == .dark
+            ? []
+            : [
+                appTealColor.opacity(0.28),
+                appTealColor.opacity(0.1),
+                Color.clear
+            ]
+        let gradientHeight: CGFloat = colorScheme == .dark ? 0 : 140
+
+        return base
+            .ignoresSafeArea()
+            .overlay(
+                Group {
+                    if gradientHeight > 0 {
+                        LinearGradient(
+                            colors: gradientColors,
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                        .frame(height: gradientHeight)
+                        .ignoresSafeArea(edges: .top)
+                    }
+                },
+                alignment: .top
+            )
     }
 
     private func updateSection(_ section: WordSection) {
@@ -2519,7 +2547,7 @@ private struct AppIconBadge: View {
                     .resizable()
                     .scaledToFit()
                     .padding(10)
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(appTealColor)
             }
         }
         .frame(width: size, height: size)
@@ -2541,6 +2569,37 @@ private extension UIImage {
             return nil
         }
         return icon
+    }
+}
+
+private struct StandardCardBackground: View {
+    @Environment(\.colorScheme) private var colorScheme
+    let cornerRadius: CGFloat
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .fill(colorScheme == .dark ? Color(UIColor.secondarySystemBackground) : Color.white)
+    }
+}
+
+private struct StandardCardShadow: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+
+    func body(content: Content) -> some View {
+        content.shadow(
+            color: colorScheme == .dark ? Color.black.opacity(0.45) : Color.black.opacity(0.08),
+            radius: colorScheme == .dark ? 18 : 10,
+            x: 0,
+            y: colorScheme == .dark ? 14 : 8
+        )
+    }
+}
+
+private extension View {
+    func cardStyle(cornerRadius: CGFloat) -> some View {
+        self
+            .background(StandardCardBackground(cornerRadius: cornerRadius))
+            .modifier(StandardCardShadow())
     }
 }
 
@@ -2602,10 +2661,10 @@ private struct SectionCardView: View {
                         .padding(6)
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(appTealColor)
                 .background(
                     Circle()
-                        .fill(Color.accentColor.opacity(0.12))
+                        .fill(appTealColor.opacity(0.12))
                 )
                 .accessibilityLabel("导入单词")
 
@@ -2631,11 +2690,7 @@ private struct SectionCardView: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 18)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color(.secondarySystemBackground))
-        )
-        .shadow(color: Color.black.opacity(0.05), radius: 10, x: 0, y: 6)
+        .cardStyle(cornerRadius: 22)
     }
 }
 
@@ -2996,14 +3051,19 @@ private struct GlassDial: View {
             let hollowDiameter = diameter * 0.7
             let hollowLineWidth = radius * 0.2
             let activeGlow = (activeAction?.highlightColor ?? Color.white).opacity(0.7)
+            let baseFillTop = Color(UIColor.systemBackground).opacity(0.9)
+            let baseFillBottom = Color(UIColor.secondarySystemBackground).opacity(0.85)
+            let strokePrimary = Color.white.opacity(0.4)
+            let strokeSecondary = Color.white.opacity(0.08)
+            let haloOpacity = 0.08
 
             ZStack {
                 Circle()
                     .fill(
                         LinearGradient(
                             colors: [
-                                Color.white.opacity(0.42),
-                                Color.white.opacity(0.12)
+                                baseFillTop,
+                                baseFillBottom
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -3012,40 +3072,39 @@ private struct GlassDial: View {
                     .frame(width: diameter, height: diameter)
                     .overlay(
                         Circle()
-                            .stroke(Color.white.opacity(0.12), lineWidth: 6)
-                            .blur(radius: 8)
+                            .stroke(Color.white.opacity(0.08), lineWidth: 4)
+                            .blur(radius: 4)
                     )
                     .overlay(
                         Circle()
                             .stroke(
                                 LinearGradient(
                                     colors: [
-                                        Color.white.opacity(0.76),
-                                        Color.white.opacity(0.28)
+                                        strokePrimary,
+                                        strokeSecondary
                                     ],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 ),
-                                lineWidth: 1.4
+                                lineWidth: 1
                             )
                     )
                     .overlay(
                         Circle()
-                            .fill(Color.white.opacity(0.12))
-                            .blur(radius: radius * 0.45)
+                            .fill(Color.white.opacity(haloOpacity))
+                            .blur(radius: radius * 0.35)
                     )
-                    .shadow(color: Color.white.opacity(0.32), radius: radius * 0.2, x: -radius * 0.12, y: -radius * 0.16)
-                    .shadow(color: Color.black.opacity(0.16), radius: radius * 0.32, x: 0, y: radius * 0.22)
+                    .shadow(color: Color.black.opacity(0.3), radius: radius * 0.35, x: 0, y: radius * 0.18)
 
                 Circle()
                     .stroke(
                         LinearGradient(
                             colors: [
-                                Color.white.opacity(0.38),
-                                Color.white.opacity(0.12),
-                                Color.white.opacity(0.3),
-                                Color.white.opacity(0.1),
-                                Color.white.opacity(0.38)
+                                Color.white.opacity(0.22),
+                                Color.white.opacity(0.08),
+                                Color.white.opacity(0.18),
+                                Color.white.opacity(0.06),
+                                Color.white.opacity(0.22)
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -3055,17 +3114,16 @@ private struct GlassDial: View {
                     .frame(width: hollowDiameter, height: hollowDiameter)
                     .overlay(
                         Circle()
-                            .stroke(activeGlow, lineWidth: 4.5)
-                            .blur(radius: 3.6)
-                            .opacity(activeSlot == nil ? 0 : 1)
+                            .stroke(activeGlow, lineWidth: 2.8)
+                            .blur(radius: 2.2)
+                            .opacity(activeSlot == nil ? 0 : 0.8)
                     )
                     .overlay(
                         Circle()
-                            .stroke(Color.white.opacity(0.55), lineWidth: 0.8)
+                            .stroke(Color.white.opacity(0.22), lineWidth: 0.6)
                             .frame(width: hollowDiameter + hollowLineWidth * 0.32, height: hollowDiameter + hollowLineWidth * 0.32)
-                            .blendMode(.plusLighter)
                     )
-                    .shadow(color: Color.black.opacity(0.18), radius: radius * 0.12, x: 0, y: radius * 0.1)
+                    .shadow(color: Color.black.opacity(0.26), radius: radius * 0.12, x: 0, y: radius * 0.08)
 
                 if let action = leadingAction {
                     slotView(for: action, radius: radius, isActive: activeSlot == .leading)
@@ -3094,10 +3152,10 @@ private struct GlassDial: View {
                     .animation(.easeOut(duration: 0.18), value: clampedOffset)
                     .overlay(
                         Circle()
-                            .stroke(Color.white.opacity(0.22), lineWidth: 3)
-                            .blur(radius: 4)
+                            .stroke(Color.white.opacity(0.14), lineWidth: 2)
+                            .blur(radius: 3)
                             .offset(clampedOffset)
-                            .opacity(0.75)
+                            .opacity(0.5)
                     )
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
@@ -3109,37 +3167,39 @@ private struct GlassDial: View {
     private func slotView(for action: GlassDialAction, radius: CGFloat, isActive: Bool) -> some View {
         let baseSize = radius * 0.58
         let isActiveAndEnabled = isActive && action.isEnabled
+        let fillBase = Color(UIColor.systemBackground).opacity(action.isEnabled ? 0.2 : 0.1)
+        let overlayBase = Color(UIColor.secondarySystemBackground).opacity(0.12)
         return ZStack {
             Circle()
-                .fill(Color.white.opacity(action.isEnabled ? 0.16 : 0.08))
+                .fill(fillBase)
                 .background(
                     Circle()
-                        .fill(Color.white.opacity(0.06))
+                        .fill(overlayBase)
                 )
                 .overlay(
                     Circle()
-                        .stroke(action.isEnabled ? Color.white.opacity(0.6) : Color.white.opacity(0.18), lineWidth: 1.1)
+                        .stroke(action.isEnabled ? Color.white.opacity(0.4) : Color.white.opacity(0.18), lineWidth: 1)
                 )
                 .overlay(
                     Circle()
-                        .fill(action.highlightColor.opacity(0.45))
-                        .blur(radius: baseSize * 0.5)
-                        .opacity(isActiveAndEnabled ? 1 : 0)
+                        .fill(action.highlightColor.opacity(0.3))
+                        .blur(radius: baseSize * 0.45)
+                        .opacity(isActiveAndEnabled ? 0.85 : 0)
                         .scaleEffect(isActiveAndEnabled ? 1.05 : 0.9)
                 )
                 .overlay(
                     Circle()
-                        .stroke(action.highlightColor.opacity(0.65), lineWidth: isActiveAndEnabled ? 2.4 : 0)
-                        .blur(radius: 2.6)
-                        .opacity(isActiveAndEnabled ? 1 : 0)
+                        .stroke(action.highlightColor.opacity(0.5), lineWidth: isActiveAndEnabled ? 1.6 : 0)
+                        .blur(radius: 2)
+                        .opacity(isActiveAndEnabled ? 0.9 : 0)
                 )
-                .shadow(color: action.highlightColor.opacity(isActiveAndEnabled ? 0.35 : 0.18), radius: baseSize * (isActiveAndEnabled ? 0.55 : 0.24), x: 0, y: baseSize * (isActiveAndEnabled ? 0.28 : 0.16))
-                .shadow(color: Color.black.opacity(0.16), radius: baseSize * 0.34, x: 0, y: baseSize * 0.2)
+                .shadow(color: action.highlightColor.opacity(isActiveAndEnabled ? 0.25 : 0.12), radius: baseSize * (isActiveAndEnabled ? 0.45 : 0.2), x: 0, y: baseSize * (isActiveAndEnabled ? 0.22 : 0.14))
+                .shadow(color: Color.black.opacity(0.22), radius: baseSize * 0.24, x: 0, y: baseSize * 0.16)
 
             Image(systemName: action.systemImage)
                 .font(.system(size: action.isEnabled ? 20 : 18, weight: .semibold))
-                .foregroundStyle(action.isEnabled ? Color.white : Color.white.opacity(0.45))
-                .shadow(color: Color.black.opacity(0.22), radius: 6, x: 0, y: 3)
+                .foregroundStyle(action.isEnabled ? Color.white : Color.white.opacity(0.4))
+                .shadow(color: Color.black.opacity(0.3), radius: 5, x: 0, y: 3)
                 .scaleEffect(isActiveAndEnabled ? 1.08 : (action.isEnabled ? 1.0 : 0.96))
         }
         .frame(width: baseSize, height: baseSize)
@@ -3148,98 +3208,88 @@ private struct GlassDial: View {
     }
 
     private func liquidCore(size: CGFloat, offset: CGSize, tint: Color?) -> some View {
-        TimelineView(.animation) { timeline in
-            let time = timeline.date.timeIntervalSinceReferenceDate
-            let rotationProgress = time.truncatingRemainder(dividingBy: 6.0) / 6.0
-            let shimmer = CGFloat(sin(time * 1.4)) * size * 0.12
-            let highlightOffset = CGSize(
-                width: -size * 0.24 + shimmer * 0.35,
-                height: -size * 0.28 + shimmer * 0.1
-            )
-            let causticShift = CGSize(width: -offset.width * 0.1, height: -offset.height * 0.1)
+        let highlightOffset = CGSize(
+            width: -size * 0.22,
+            height: -size * 0.26
+        )
 
-            Circle()
-                .fill(
-                    AngularGradient(
-                        gradient: Gradient(colors: [
-                            Color(red: 0.87, green: 0.98, blue: 1.0),
-                            Color(red: 0.99, green: 0.81, blue: 0.97),
-                            Color(red: 0.82, green: 0.95, blue: 0.86),
-                            Color(red: 0.92, green: 0.89, blue: 1.0),
-                            Color(red: 0.87, green: 0.98, blue: 1.0)
-                        ]),
-                        center: .center,
-                        startAngle: .degrees(rotationProgress * 360),
-                        endAngle: .degrees(rotationProgress * 360 + 360)
+        return Circle()
+            .fill(
+                AngularGradient(
+                    gradient: Gradient(colors: [
+                        Color(red: 0.86, green: 0.94, blue: 1.0),
+                        Color(red: 0.94, green: 0.86, blue: 0.98),
+                        Color(red: 0.82, green: 0.94, blue: 0.86),
+                        Color(red: 0.92, green: 0.89, blue: 1.0),
+                        Color(red: 0.86, green: 0.94, blue: 1.0)
+                    ]),
+                    center: .center
+                )
+            )
+            .overlay(
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            gradient: Gradient(colors: [
+                                Color.white.opacity(0.35),
+                                Color.white.opacity(0.12),
+                                .clear
+                            ]),
+                            center: .init(x: 0.25, y: 0.2),
+                            startRadius: 0,
+                            endRadius: size * 0.7
+                        )
                     )
-                )
-                .overlay(
-                    Circle()
-                        .fill(
-                            RadialGradient(
-                                gradient: Gradient(colors: [
-                                    Color.white.opacity(0.65),
-                                    Color.white.opacity(0.2),
-                                    .clear
-                                ]),
-                                center: .init(x: 0.25, y: 0.2),
-                                startRadius: 0,
-                                endRadius: size * 0.7
-                            )
+                    .blur(radius: size * 0.14)
+                    .offset(highlightOffset)
+            )
+            .overlay(
+                Circle()
+                    .stroke(Color.white.opacity(0.24), lineWidth: 1)
+            )
+            .overlay(
+                Circle()
+                    .stroke(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.28),
+                                Color.white.opacity(0.12)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 2
+                    )
+                    .blur(radius: 2.2)
+                    .opacity(0.5)
+            )
+            .overlay(
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.22),
+                                Color.clear
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
                         )
-                        .blur(radius: size * 0.22)
-                        .offset(highlightOffset)
-                )
-                .overlay(
+                    )
+            )
+            .overlay(
+                Circle()
+                    .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                    .blur(radius: 1.8)
+                    .opacity(0.5)
+            )
+            .overlay {
+                if let tintColor = tint {
                     Circle()
-                        .stroke(Color.white.opacity(0.55), lineWidth: 1.3)
-                        .blendMode(.plusLighter)
-                )
-                .overlay(
-                    Circle()
-                        .stroke(
-                            LinearGradient(
-                                colors: [
-                                    Color.white.opacity(0.35),
-                                    Color.white.opacity(0.12)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 2.6
-                        )
-                        .blur(radius: 3.4)
-                        .opacity(0.7)
-                )
-                .overlay(
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color.white.opacity(0.28),
-                                    Color.clear
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .mask(
-                            Circle()
-                                .offset(x: causticShift.width, y: causticShift.height)
-                                .blur(radius: size * 0.24)
-                        )
-                )
-                .shadow(color: Color.white.opacity(0.32), radius: size * 0.18, x: -size * 0.12, y: -size * 0.18)
-                .shadow(color: Color.black.opacity(0.18), radius: size * 0.3, x: 0, y: size * 0.18)
-                .overlay {
-                    if let tintColor = tint {
-                        Circle()
-                            .fill(tintColor.opacity(0.4))
-                            .blur(radius: size * 0.45)
-                            .scaleEffect(1.35)
-                    }
+                        .fill(tintColor.opacity(0.3))
+                        .blur(radius: size * 0.32)
+                        .scaleEffect(1.2)
                 }
-        }
+            }
     }
 
     private func dragGesture(radius: CGFloat) -> some Gesture {
