@@ -777,9 +777,8 @@ private struct ProfileCenterView: View {
                     Haptic.trigger(.light)
                     showingSettingsDialog = true
                 } label: {
-                    Image(systemName: "gearshape.fill")
-                        .font(.system(size: 19, weight: .semibold))
-                        .foregroundColor(appTealColor)
+                    SettingsGearIcon(color: appTealColor, lineWidth: 1.5)
+                        .frame(width: 24, height: 24)
                         .padding(10)
                         .background(
                             Circle()
@@ -796,7 +795,7 @@ private struct ProfileCenterView: View {
             value: "\(bookStore.sections.count)"
         )
         ProfileSummaryChip(
-            title: "已完成遍数",
+            title: "累计遍数",
             value: "\(totalCompletedPasses)"
         )
         ProfileSummaryChip(
@@ -865,9 +864,25 @@ private struct ProfileCenterView: View {
         )
     }
 
+    @ViewBuilder
     private var recentActivityCard: some View {
-        guard let recent = recentSection else {
-            return ProfileInfoCard(
+        if let recent = recentSection {
+            let state = progressStore.progress(for: recent.id)
+            let totalPages = max(1, (recent.words.count + wordsPerPage - 1) / wordsPerPage)
+            let progressText = "第 \(min(state.completedPages + 1, totalPages))/\(totalPages) 页 · 第 \(min(state.completedPasses + 1, recent.targetPasses))/\(recent.targetPasses) 遍"
+
+            NavigationLink(value: recent.id) {
+                ProfileInfoCard(
+                    title: "最近学习",
+                    subtitle: "\(recent.title)\n\(progressText)",
+                    badge: "继续学习",
+                    systemImage: "book.circle",
+                    accent: appTealColor
+                )
+            }
+            .buttonStyle(.plain)
+        } else {
+            ProfileInfoCard(
                 title: "最近学习",
                 subtitle: "还没有开始任何词书，去词书页挑选吧。",
                 badge: "无记录",
@@ -875,18 +890,6 @@ private struct ProfileCenterView: View {
                 accent: Color.gray
             )
         }
-
-        let state = progressStore.progress(for: recent.id)
-        let totalPages = max(1, (recent.words.count + wordsPerPage - 1) / wordsPerPage)
-        let progressText = "第 \(min(state.completedPages + 1, totalPages))/\(totalPages) 页 · 第 \(min(state.completedPasses + 1, recent.targetPasses))/\(recent.targetPasses) 遍"
-
-        return ProfileInfoCard(
-            title: "最近学习",
-            subtitle: "\(recent.title)\n\(progressText)",
-            badge: "继续学习",
-            systemImage: "book.circle",
-            accent: appTealColor
-        )
     }
 
     private var recycleBinCard: some View {
@@ -915,7 +918,7 @@ private struct ProfileCenterView: View {
     }
 
     private var recycleBinBadge: String? {
-        bookStore.trashedSections.isEmpty ? "已清空" : "管理"
+        bookStore.trashedSections.isEmpty ? "空空如也" : "管理"
     }
 
     private var recycleBinAccent: Color {
@@ -1405,6 +1408,99 @@ private struct ProfileInfoCard: View {
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
         .cardStyle(cornerRadius: 24)
+    }
+}
+
+private struct SettingsGearIcon: View {
+    var color: Color
+    var lineWidth: CGFloat = 1.5
+
+    var body: some View {
+        SettingsGearShape()
+            .stroke(color, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round, lineJoin: .round))
+            .aspectRatio(1, contentMode: .fit)
+    }
+}
+
+private struct SettingsGearShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let scale = min(rect.width, rect.height) / 24.0
+        let dx = rect.midX - 12.0 * scale
+        let dy = rect.midY - 12.0 * scale
+
+        func point(_ x: Double, _ y: Double) -> CGPoint {
+            CGPoint(x: dx + CGFloat(x) * scale, y: dy + CGFloat(y) * scale)
+        }
+
+        var path = Path()
+
+        // Path 1 (gear outline)
+        path.move(to: point(10.343000, 3.940000))
+        path.addCurve(to: point(11.453000, 3.000000), control1: point(10.433000, 3.398000), control2: point(10.903000, 3.000000))
+        path.addCurve(to: point(12.546000, 3.000000), control1: point(11.817333, 3.000000), control2: point(12.181667, 3.000000))
+        path.addCurve(to: point(13.656000, 3.940000), control1: point(13.096000, 3.000000), control2: point(13.566000, 3.398000))
+        path.addCurve(to: point(13.805000, 4.834000), control1: point(13.705667, 4.238000), control2: point(13.755333, 4.536000))
+        path.addCurve(to: point(14.585000, 5.764000), control1: point(13.875000, 5.258000), control2: point(14.189000, 5.598000))
+        path.addCurve(to: point(15.790000, 5.656000), control1: point(14.983000, 5.928000), control2: point(15.440000, 5.906000))
+        path.addCurve(to: point(16.527000, 5.129000), control1: point(16.035667, 5.480333), control2: point(16.281333, 5.304667))
+        path.addCurve(to: point(17.977000, 5.249000), control1: point(16.972755, 4.810361), control2: point(17.589691, 4.861417))
+        path.addCurve(to: point(18.750000, 6.023000), control1: point(18.234667, 5.507000), control2: point(18.492333, 5.765000))
+        path.addCurve(to: point(18.870000, 7.473000), control1: point(19.140000, 6.412000), control2: point(19.190000, 7.025000))
+        path.addCurve(to: point(18.343000, 8.210000), control1: point(18.694333, 7.718667), control2: point(18.518667, 7.964333))
+        path.addCurve(to: point(18.236000, 9.414000), control1: point(18.093000, 8.560000), control2: point(18.071000, 9.016000))
+        path.addCurve(to: point(19.166000, 10.194000), control1: point(18.401000, 9.811000), control2: point(18.741000, 10.124000))
+        path.addCurve(to: point(20.059000, 10.344000), control1: point(19.463667, 10.244000), control2: point(19.761333, 10.294000))
+        path.addCurve(to: point(20.999000, 11.453000), control1: point(20.602000, 10.434000), control2: point(20.999000, 10.903000))
+        path.addCurve(to: point(20.999000, 12.547000), control1: point(20.999000, 11.817667), control2: point(20.999000, 12.182333))
+        path.addCurve(to: point(20.059000, 13.657000), control1: point(20.999000, 13.097000), control2: point(20.602000, 13.567000))
+        path.addCurve(to: point(19.165000, 13.806000), control1: point(19.761000, 13.706667), control2: point(19.463000, 13.756333))
+        path.addCurve(to: point(18.236000, 14.586000), control1: point(18.741000, 13.876000), control2: point(18.401000, 14.189000))
+        path.addCurve(to: point(18.343000, 15.790000), control1: point(18.071000, 14.984000), control2: point(18.093000, 15.440000))
+        path.addCurve(to: point(18.870000, 16.528000), control1: point(18.518667, 16.036000), control2: point(18.694333, 16.282000))
+        path.addCurve(to: point(18.750000, 17.978000), control1: point(19.190000, 16.975000), control2: point(19.139000, 17.588000))
+        path.addCurve(to: point(17.976000, 18.751000), control1: point(18.492000, 18.235667), control2: point(18.234000, 18.493333))
+        path.addCurve(to: point(16.527000, 18.871000), control1: point(17.588831, 19.138038), control2: point(16.972564, 19.189074))
+        path.addCurve(to: point(15.789000, 18.344000), control1: point(16.281000, 18.695333), control2: point(16.035000, 18.519667))
+        path.addCurve(to: point(14.586000, 18.237000), control1: point(15.439000, 18.094000), control2: point(14.983000, 18.072000))
+        path.addCurve(to: point(13.805000, 19.166000), control1: point(14.188000, 18.402000), control2: point(13.876000, 18.742000))
+        path.addCurve(to: point(13.656000, 20.060000), control1: point(13.755333, 19.464000), control2: point(13.705667, 19.762000))
+        path.addCurve(to: point(12.546000, 21.000000), control1: point(13.566000, 20.602000), control2: point(13.096000, 21.000000))
+        path.addCurve(to: point(11.452000, 21.000000), control1: point(12.181333, 21.000000), control2: point(11.816667, 21.000000))
+        path.addCurve(to: point(10.342000, 20.060000), control1: point(10.902000, 21.000000), control2: point(10.433000, 20.602000))
+        path.addCurve(to: point(10.194000, 19.166000), control1: point(10.292667, 19.762000), control2: point(10.243333, 19.464000))
+        path.addCurve(to: point(9.413000, 18.236000), control1: point(10.123000, 18.742000), control2: point(9.810000, 18.402000))
+        path.addCurve(to: point(8.209000, 18.344000), control1: point(9.015000, 18.072000), control2: point(8.559000, 18.094000))
+        path.addCurve(to: point(7.471000, 18.871000), control1: point(7.963000, 18.519667), control2: point(7.717000, 18.695333))
+        path.addCurve(to: point(6.021000, 18.751000), control1: point(7.024000, 19.191000), control2: point(6.411000, 19.140000))
+        path.addCurve(to: point(5.248000, 17.977000), control1: point(5.763333, 18.493000), control2: point(5.505667, 18.235000))
+        path.addCurve(to: point(5.128000, 16.527000), control1: point(4.860417, 17.589691), control2: point(4.809361, 16.972755))
+        path.addCurve(to: point(5.655000, 15.790000), control1: point(5.303667, 16.281333), control2: point(5.479333, 16.035667))
+        path.addCurve(to: point(5.763000, 14.586000), control1: point(5.905000, 15.440000), control2: point(5.927000, 14.984000))
+        path.addCurve(to: point(4.833000, 13.806000), control1: point(5.598000, 14.189000), control2: point(5.257000, 13.876000))
+        path.addCurve(to: point(3.939000, 13.656000), control1: point(4.535000, 13.756000), control2: point(4.237000, 13.706000))
+        path.addCurve(to: point(2.999000, 12.547000), control1: point(3.397000, 13.566000), control2: point(2.999000, 13.096000))
+        path.addCurve(to: point(2.999000, 11.453000), control1: point(2.999000, 12.182333), control2: point(2.999000, 11.817667))
+        path.addCurve(to: point(3.939000, 10.343000), control1: point(2.999000, 10.903000), control2: point(3.397000, 10.433000))
+        path.addCurve(to: point(4.833000, 10.194000), control1: point(4.237000, 10.293333), control2: point(4.535000, 10.243667))
+        path.addCurve(to: point(5.763000, 9.414000), control1: point(5.257000, 10.124000), control2: point(5.598000, 9.811000))
+        path.addCurve(to: point(5.655000, 8.210000), control1: point(5.928000, 9.016000), control2: point(5.906000, 8.560000))
+        path.addCurve(to: point(5.129000, 7.472000), control1: point(5.479667, 7.964000), control2: point(5.304333, 7.718000))
+        path.addCurve(to: point(5.249000, 6.022000), control1: point(4.810361, 7.026245), control2: point(4.861417, 6.409309))
+        path.addCurve(to: point(6.022000, 5.249000), control1: point(5.506667, 5.764333), control2: point(5.764333, 5.506667))
+        path.addCurve(to: point(7.472000, 5.129000), control1: point(6.409309, 4.861417), control2: point(7.026245, 4.810361))
+        path.addCurve(to: point(8.209000, 5.656000), control1: point(7.717667, 5.304667), control2: point(7.963333, 5.480333))
+        path.addCurve(to: point(9.413000, 5.763000), control1: point(8.559000, 5.906000), control2: point(9.016000, 5.928000))
+        path.addCurve(to: point(10.193000, 4.834000), control1: point(9.810000, 5.598000), control2: point(10.123000, 5.258000))
+        path.addCurve(to: point(10.343000, 3.940000), control1: point(10.243000, 4.536000), control2: point(10.293000, 4.238000))
+        path.closeSubpath()
+
+        // Path 2 (inner circle)
+        path.move(to: point(15.000000, 12.000000))
+        path.addCurve(to: point(9.000000, 12.000000), control1: point(15.000000, 15.464102), control2: point(9.000000, 15.464102))
+        path.addCurve(to: point(15.000000, 12.000000), control1: point(9.000000, 8.535898), control2: point(15.000000, 8.535898))
+        path.closeSubpath()
+
+        return path
     }
 }
 
