@@ -14,6 +14,7 @@ import PhotosUI
 private let wordsPerPage = 10
 private let recycleBinRetentionInterval: TimeInterval = 30 * 24 * 60 * 60
 private let appTealColor = Color(red: 0.27, green: 0.63, blue: 0.55) // 湖绿色 #45A08C
+private let recycleBinActiveColor = Color(red: 0.99, green: 0.62, blue: 0.24) // 温暖橙色
 
 private func sanitizeUserIdentifier(_ value: String) -> String {
     let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
@@ -777,13 +778,9 @@ private struct ProfileCenterView: View {
                     Haptic.trigger(.light)
                     showingSettingsDialog = true
                 } label: {
-                    SettingsGearIcon(color: appTealColor, lineWidth: 1.5)
-                        .frame(width: 24, height: 24)
+                    SettingsGearIcon(color: Color.primary, lineWidth: 1.8)
+                        .frame(width: 28, height: 28)
                         .padding(10)
-                        .background(
-                            Circle()
-                                .fill(appTealColor.opacity(0.12))
-                        )
                 }
             }
 
@@ -922,7 +919,7 @@ private struct ProfileCenterView: View {
     }
 
     private var recycleBinAccent: Color {
-        bookStore.trashedSections.isEmpty ? Color(.systemGray3) : appTealColor
+        bookStore.trashedSections.isEmpty ? Color(.systemGray3) : recycleBinActiveColor
     }
 
     private var wordsToday: Int {
@@ -1026,13 +1023,19 @@ private struct ProfileCenterView: View {
 
     private var recentSection: WordSection? {
         bookStore.sections.max { lhs, rhs in
-            progressScore(for: lhs) < progressScore(for: rhs)
+            recencyKey(for: lhs) < recencyKey(for: rhs)
         }
     }
 
     private func progressScore(for section: WordSection) -> Int {
         let state = progressStore.progress(for: section.id)
         return state.completedPasses * 10_000 + state.completedPages
+    }
+
+    private func recencyKey(for section: WordSection) -> (Date, Int, String) {
+        let state = progressStore.progress(for: section.id)
+        let lastStudied = state.lastStudiedAt ?? Date.distantPast
+        return (lastStudied, progressScore(for: section), section.id.uuidString)
     }
 
     private func loadPhoto(from item: PhotosPickerItem) async {
@@ -1344,7 +1347,7 @@ private struct ProfileSummaryChip: View {
         VStack(spacing: 6) {
             Text(value)
                 .font(.system(size: 18, weight: .semibold, design: .rounded))
-                .foregroundColor(appTealColor)
+                .foregroundStyle(.primary)
             Text(title)
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.secondary)
@@ -1390,15 +1393,7 @@ private struct ProfileInfoCard: View {
             }
 
             HStack(alignment: .top, spacing: 14) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 24, weight: .semibold))
-                    .foregroundColor(accent)
-                    .frame(width: 46, height: 46)
-                    .background(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(accent.opacity(0.12))
-                    )
-
+                ProfileInfoIcon(accent: accent, systemImage: systemImage)
                 Text(subtitle)
                     .font(.system(size: 15))
                     .foregroundStyle(.secondary)
@@ -2921,6 +2916,7 @@ private struct WordSectionDetailView: View {
         }
         .onAppear {
             activeDialAction = nil
+            progressStore.recordStudyEvent(for: section.id)
             guard !didLoadInitialPage else { return }
             progressStore.clampProgress(for: section.id, totalPages: pageEntries.count, targetPasses: section.targetPasses)
             let nextPage = progressStore.nextPageIndex(for: section.id, totalPages: pageEntries.count, targetPasses: section.targetPasses)
@@ -2928,7 +2924,8 @@ private struct WordSectionDetailView: View {
             enforceForwardOnlyNavigation(for: currentPage)
             didLoadInitialPage = true
         }
-        .onChange(of: section.id) { _, _ in
+        .onChange(of: section.id) { _, newValue in
+            progressStore.recordStudyEvent(for: newValue)
             didLoadInitialPage = false
             activeDialAction = nil
         }
@@ -4090,6 +4087,11 @@ final class SectionProgressStore: ObservableObject {
     struct ProgressState: Codable, Equatable {
         var completedPages: Int = 0
         var completedPasses: Int = 0
+        var lastStudiedAt: Date? = nil
+
+        mutating func stampStudy() {
+            lastStudiedAt = Date()
+        }
     }
 
     @Published private var progressStates: [UUID: ProgressState] = [:] {
@@ -4151,8 +4153,15 @@ final class SectionProgressStore: ObservableObject {
             state.completedPages = max(state.completedPages, nextPage)
         }
 
+        state.stampStudy()
         progressStates[sectionID] = state
         return state
+    }
+
+    func recordStudyEvent(for sectionID: UUID) {
+        var state = progress(for: sectionID)
+        state.stampStudy()
+        progressStates[sectionID] = state
     }
 
     fileprivate func clampProgress(for sectionID: UUID, totalPages: Int, targetPasses: Int) {
@@ -4755,4 +4764,57 @@ private extension WordSection {
     let store = AuthSessionStore(userDefaults: previewDefaults ?? .standard, initialSession: session)
     return ContentView(session: session)
         .environmentObject(store)
+}
+
+
+private struct ProfileInfoIcon: View {
+    var accent: Color
+    var systemImage: String
+
+    var body: some View {
+        Group {
+            if systemImage == "book.circle" {
+                HeroBookmarkIconShape()
+                    .stroke(accent, style: StrokeStyle(lineWidth: 2.0, lineCap: .round, lineJoin: .round))
+                    .frame(width: 28, height: 28)
+            } else if systemImage == "trash" {
+                TrashShape()
+                    .stroke(accent, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+                    .frame(width: 28, height: 28)
+            } else {
+                Image(systemName: systemImage)
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundColor(accent)
+            }
+        }
+        .frame(width: 44, height: 44)
+        .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(accent.opacity(0.4))
+            )
+    }
+}
+
+private struct HeroBookmarkIconShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let scale = min(rect.width, rect.height) / 24.0
+        let dx = rect.midX - 12.0 * scale
+        let dy = rect.midY - 12.0 * scale
+
+        func point(_ x: Double, _ y: Double) -> CGPoint {
+            CGPoint(x: dx + CGFloat(x) * scale, y: dy + CGFloat(y) * scale)
+        }
+
+        var path = Path()
+        path.move(to: point(17.593000, 3.322000))
+        path.addCurve(to: point(19.500000, 5.507000), control1: point(18.693000, 3.450000), control2: point(19.500000, 4.399000))
+        path.addCurve(to: point(19.500000, 21.000000), control1: point(19.500000, 10.671333), control2: point(19.500000, 15.835667))
+        path.addCurve(to: point(12.000000, 17.250000), control1: point(17.000000, 19.750000), control2: point(14.500000, 18.500000))
+        path.addCurve(to: point(4.500000, 21.000000), control1: point(9.500000, 18.500000), control2: point(7.000000, 19.750000))
+        path.addCurve(to: point(4.500000, 5.507000), control1: point(4.500000, 15.835667), control2: point(4.500000, 10.671333))
+        path.addCurve(to: point(6.407000, 3.322000), control1: point(4.500000, 4.399000), control2: point(5.306000, 3.450000))
+        path.addCurve(to: point(17.593000, 3.322000), control1: point(10.123180, 2.890636), control2: point(13.876820, 2.890636))
+        path.closeSubpath()
+        return path
+    }
 }
