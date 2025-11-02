@@ -639,6 +639,7 @@ private struct ProfileCenterView: View {
     @State private var showPhotoPicker = false
     @State private var photoPickerItem: PhotosPickerItem?
     @State private var showingRecycleBin = false
+    @State private var showingAIChat = false
 
     private let emojiOptions = ["🎓", "📚", "✏️", "📖", "🌟", "💡", "🚀", "🎯", "🏆", "💪", "🔥", "⚡️", "🌈", "🎨", "🎭", "🎪"]
 
@@ -648,6 +649,7 @@ private struct ProfileCenterView: View {
                 headerCard
                 dailyStatusCard
                 recentActivityCard
+                aiAssistantCard
                 recycleBinCard
 
                 Button {
@@ -723,6 +725,10 @@ private struct ProfileCenterView: View {
                 onSelect: { _ in userProfile.avatarImageData = nil }
             )
             .presentationDetents([.height(300)])
+        }
+        .sheet(isPresented: $showingAIChat) {
+            AIChatView()
+                .presentationDetents([.medium, .large])
         }
         .sheet(isPresented: $showingNameEditor) {
             NameEditorView(
@@ -887,6 +893,22 @@ private struct ProfileCenterView: View {
                 accent: Color.gray
             )
         }
+    }
+
+    private var aiAssistantCard: some View {
+        Button {
+            Haptic.trigger(.medium)
+            showingAIChat = true
+        } label: {
+            ProfileInfoCard(
+                title: "AI 学习助手",
+                subtitle: "使用 DeepSeek Chat 模型，随时获取记忆技巧、例句和学习建议。",
+                badge: "开始对话",
+                systemImage: "sparkles",
+                accent: appTealColor
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     private var recycleBinCard: some View {
