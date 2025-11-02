@@ -304,65 +304,136 @@ private struct MonthlyProgressChart: View {
                 }
             }
 
-            // Chart
-            VStack(spacing: 8) {
-                GeometryReader { geometry in
-                    let chartHeight = geometry.size.height - 30
-                    let chartWidth = geometry.size.width
-                    let spacing = chartWidth / CGFloat(max(data.count, 1))
+        // Chart
+        VStack(spacing: 8) {
+            GeometryReader { geometry in
+                let chartHeight = geometry.size.height - 30
+                let chartWidth = geometry.size.width
+                let spacing = chartWidth / CGFloat(max(data.count, 1))
+                let calendar = Calendar.current
+                let tickDays = [1, 7, 14, 21, 28]
+                let today = Date()
+                let pastPoints: [(offset: Int, value: Int)] = data.enumerated().compactMap { index, point in
+                    let components = DateComponents(year: year, month: month, day: point.day)
+                    guard let date = calendar.date(from: components),
+                          date <= today,
+                          point.words > 0 else {
+                        return nil
+                    }
+                    return (index, point.words)
+                }
 
-                    ZStack(alignment: .bottom) {
-                        // Grid lines
-                        ForEach(0..<5) { i in
-                            let y = chartHeight * CGFloat(i) / 4
-                            Path { path in
-                                path.move(to: CGPoint(x: 0, y: y))
-                                path.addLine(to: CGPoint(x: chartWidth, y: y))
-                            }
-                            .stroke(Color(.systemGray5), lineWidth: 1)
-                        }
-
-                        // Line chart
+                ZStack(alignment: .bottom) {
+                    // Grid lines
+                    ForEach(0..<5) { i in
+                        let y = chartHeight * CGFloat(i) / 4
                         Path { path in
-                            for (index, point) in data.enumerated() {
-                                let x = spacing * CGFloat(index) + spacing / 2
-                                let normalizedValue = CGFloat(point.words) / CGFloat(maxWords)
+                            path.move(to: CGPoint(x: 0, y: y))
+                            path.addLine(to: CGPoint(x: chartWidth, y: y))
+                        }
+                        .stroke(Color(.systemGray5), lineWidth: 1)
+                    }
+
+                    if let firstPoint = pastPoints.first, let lastPoint = pastPoints.last {
+                        // Filled area under the curve
+                        Path { path in
+                            let startX = spacing * CGFloat(firstPoint.offset) + spacing / 2
+                            let startY = chartHeight * (1 - CGFloat(firstPoint.value) / CGFloat(maxWords))
+                            path.move(to: CGPoint(x: startX, y: chartHeight))
+                            path.addLine(to: CGPoint(x: startX, y: startY))
+
+                            for entry in pastPoints {
+                                let x = spacing * CGFloat(entry.offset) + spacing / 2
+                                let normalizedValue = CGFloat(entry.value) / CGFloat(maxWords)
+                                let y = chartHeight * (1 - normalizedValue)
+                                path.addLine(to: CGPoint(x: x, y: y))
+                            }
+
+                            let endX = spacing * CGFloat(lastPoint.offset) + spacing / 2
+                            path.addLine(to: CGPoint(x: endX, y: chartHeight))
+                            path.closeSubpath()
+                        }
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    appTealColor.opacity(0.26),
+                                    appTealColor.opacity(0.05)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+
+                        // Trend line
+                        Path { path in
+                            var didMove = false
+                            for entry in pastPoints {
+                                let x = spacing * CGFloat(entry.offset) + spacing / 2
+                                let normalizedValue = CGFloat(entry.value) / CGFloat(maxWords)
                                 let y = chartHeight * (1 - normalizedValue)
 
-                                if index == 0 {
+                                if !didMove {
                                     path.move(to: CGPoint(x: x, y: y))
+                                    didMove = true
                                 } else {
                                     path.addLine(to: CGPoint(x: x, y: y))
                                 }
                             }
                         }
-                        .stroke(appTealColor, style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
+                        .stroke(appTealColor, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
 
-                        // Data points
-                        ForEach(Array(data.enumerated()), id: \.offset) { index, point in
-                            let x = spacing * CGFloat(index) + spacing / 2
-                            let normalizedValue = CGFloat(point.words) / CGFloat(maxWords)
+                        // Points with glow and value labels
+                        ForEach(pastPoints, id: \.offset) { entry in
+                            let x = spacing * CGFloat(entry.offset) + spacing / 2
+                            let normalizedValue = CGFloat(entry.value) / CGFloat(maxWords)
                             let y = chartHeight * (1 - normalizedValue)
 
+                            let haloSize: CGFloat = 18
+                            let pointSize: CGFloat = 10
+
                             Circle()
-                                .fill(point.words > 0 ? appTealColor : Color.clear)
-                                .frame(width: point.words > 0 ? 6 : 0, height: point.words > 0 ? 6 : 0)
+                                .fill(Color.white.opacity(0.8))
+                                .frame(width: haloSize, height: haloSize)
                                 .position(x: x, y: y)
+                                .shadow(color: appTealColor.opacity(0.3), radius: 6, x: 0, y: 2)
+
+                            Circle()
+                                .fill(appTealColor)
+                                .frame(width: pointSize, height: pointSize)
+                                .position(x: x, y: y)
+
+                            Text("\(entry.value)")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 4)
+                                .background(
+                                    Capsule()
+                                        .fill(Color.white.opacity(0.85))
+                                )
+                                .overlay(
+                                    Capsule()
+                                        .stroke(appTealColor.opacity(0.25), lineWidth: 0.5)
+                                )
+                                .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
+                                .baselineOffset(-6)
+                                .position(x: x, y: max(y - 32, 0))
                         }
                     }
-                }
-                .frame(height: 200)
 
-                // X-axis labels
-                HStack(spacing: 0) {
-                    ForEach([1, 7, 14, 21, 28], id: \.self) { day in
+                    ForEach(tickDays.filter { $0 <= data.count }, id: \.self) { day in
+                        let index = day - 1
+                        let x = spacing * CGFloat(index) + spacing / 2
                         Text("\(day)")
                             .font(.system(size: 11))
                             .foregroundColor(.secondary)
-                            .frame(maxWidth: .infinity)
+                            .position(x: x, y: chartHeight + 12)
                     }
                 }
             }
+            .frame(height: 200)
+            .padding(.bottom, 6)
+        }
 
             // Stats
             HStack(spacing: 20) {
