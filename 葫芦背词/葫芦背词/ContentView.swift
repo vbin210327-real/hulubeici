@@ -275,6 +275,8 @@ private struct MonthlyProgressChart: View {
         max(data.map(\.words).max() ?? 10, 10)
     }
 
+    @State private var selectedPointIndex: Int?
+
     var body: some View {
         VStack(spacing: 16) {
             // Month selector
@@ -304,136 +306,159 @@ private struct MonthlyProgressChart: View {
                 }
             }
 
-        // Chart
-        VStack(spacing: 8) {
-            GeometryReader { geometry in
-                let chartHeight = geometry.size.height - 30
-                let chartWidth = geometry.size.width
-                let spacing = chartWidth / CGFloat(max(data.count, 1))
-                let calendar = Calendar.current
-                let tickDays = [1, 7, 14, 21, 28]
-                let today = Date()
-                let pastPoints: [(offset: Int, value: Int)] = data.enumerated().compactMap { index, point in
-                    let components = DateComponents(year: year, month: month, day: point.day)
-                    guard let date = calendar.date(from: components),
-                          date <= today,
-                          point.words > 0 else {
-                        return nil
+            // Chart
+            VStack(spacing: 8) {
+                GeometryReader { geometry in
+                    let chartHeight = geometry.size.height - 30
+                    let chartWidth = geometry.size.width
+                    let spacing = chartWidth / CGFloat(max(data.count, 1))
+                    let tickDays = [1, 7, 14, 21, 28]
+
+                    let plottedPoints: [(offset: Int, value: Int)] = data.enumerated().compactMap { index, point in
+                        guard point.words > 0 else { return nil }
+                        return (index, point.words)
                     }
-                    return (index, point.words)
-                }
+                    let pointPositions = plottedPoints.map { spacing * CGFloat($0.offset) + spacing / 2 }
 
-                ZStack(alignment: .bottom) {
-                    // Grid lines
-                    ForEach(0..<5) { i in
-                        let y = chartHeight * CGFloat(i) / 4
-                        Path { path in
-                            path.move(to: CGPoint(x: 0, y: y))
-                            path.addLine(to: CGPoint(x: chartWidth, y: y))
-                        }
-                        .stroke(Color(.systemGray5), lineWidth: 1)
-                    }
-
-                    if let firstPoint = pastPoints.first, let lastPoint = pastPoints.last {
-                        // Filled area under the curve
-                        Path { path in
-                            let startX = spacing * CGFloat(firstPoint.offset) + spacing / 2
-                            let startY = chartHeight * (1 - CGFloat(firstPoint.value) / CGFloat(maxWords))
-                            path.move(to: CGPoint(x: startX, y: chartHeight))
-                            path.addLine(to: CGPoint(x: startX, y: startY))
-
-                            for entry in pastPoints {
-                                let x = spacing * CGFloat(entry.offset) + spacing / 2
-                                let normalizedValue = CGFloat(entry.value) / CGFloat(maxWords)
-                                let y = chartHeight * (1 - normalizedValue)
-                                path.addLine(to: CGPoint(x: x, y: y))
+                    ZStack(alignment: .bottom) {
+                        // Grid lines
+                        ForEach(0..<5) { i in
+                            let y = chartHeight * CGFloat(i) / 4
+                            Path { path in
+                                path.move(to: CGPoint(x: 0, y: y))
+                                path.addLine(to: CGPoint(x: chartWidth, y: y))
                             }
-
-                            let endX = spacing * CGFloat(lastPoint.offset) + spacing / 2
-                            path.addLine(to: CGPoint(x: endX, y: chartHeight))
-                            path.closeSubpath()
+                            .stroke(Color(.systemGray5), lineWidth: 1)
                         }
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    appTealColor.opacity(0.26),
-                                    appTealColor.opacity(0.05)
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
 
-                        // Trend line
-                        Path { path in
-                            var didMove = false
-                            for entry in pastPoints {
-                                let x = spacing * CGFloat(entry.offset) + spacing / 2
-                                let normalizedValue = CGFloat(entry.value) / CGFloat(maxWords)
-                                let y = chartHeight * (1 - normalizedValue)
+                        if let first = plottedPoints.first, let last = plottedPoints.last {
+                            Path { path in
+                                let startX = spacing * CGFloat(first.offset) + spacing / 2
+                                let startY = chartHeight * (1 - CGFloat(first.value) / CGFloat(maxWords))
+                                path.move(to: CGPoint(x: startX, y: chartHeight))
+                                path.addLine(to: CGPoint(x: startX, y: startY))
 
-                                if !didMove {
-                                    path.move(to: CGPoint(x: x, y: y))
-                                    didMove = true
-                                } else {
+                                for point in plottedPoints {
+                                    let x = spacing * CGFloat(point.offset) + spacing / 2
+                                    let normalized = CGFloat(point.value) / CGFloat(maxWords)
+                                    let y = chartHeight * (1 - normalized)
                                     path.addLine(to: CGPoint(x: x, y: y))
                                 }
+
+                                let endX = spacing * CGFloat(last.offset) + spacing / 2
+                                path.addLine(to: CGPoint(x: endX, y: chartHeight))
+                                path.closeSubpath()
                             }
-                        }
-                        .stroke(appTealColor, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        appTealColor.opacity(0.26),
+                                        appTealColor.opacity(0.05)
+                                    ],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
 
-                        // Points with glow and value labels
-                        ForEach(pastPoints, id: \.offset) { entry in
-                            let x = spacing * CGFloat(entry.offset) + spacing / 2
-                            let normalizedValue = CGFloat(entry.value) / CGFloat(maxWords)
-                            let y = chartHeight * (1 - normalizedValue)
+                            Path { path in
+                                var didMove = false
+                                for point in plottedPoints {
+                                    let x = spacing * CGFloat(point.offset) + spacing / 2
+                                    let normalized = CGFloat(point.value) / CGFloat(maxWords)
+                                    let y = chartHeight * (1 - normalized)
 
-                            let haloSize: CGFloat = 18
-                            let pointSize: CGFloat = 10
+                                    if !didMove {
+                                        path.move(to: CGPoint(x: x, y: y))
+                                        didMove = true
+                                    } else {
+                                        path.addLine(to: CGPoint(x: x, y: y))
+                                    }
+                                }
+                            }
+                            .stroke(appTealColor, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
 
-                            Circle()
-                                .fill(Color.white.opacity(0.8))
-                                .frame(width: haloSize, height: haloSize)
-                                .position(x: x, y: y)
-                                .shadow(color: appTealColor.opacity(0.3), radius: 6, x: 0, y: 2)
+                            ForEach(Array(plottedPoints.enumerated()), id: \.element.offset) { pair in
+                                let point = pair.element
+                                let index = pair.offset
+                                let x = pointPositions[index]
+                                let normalized = CGFloat(point.value) / CGFloat(maxWords)
+                                let y = chartHeight * (1 - normalized)
+                                let isSelected = selectedPointIndex == point.offset
 
-                            Circle()
-                                .fill(appTealColor)
-                                .frame(width: pointSize, height: pointSize)
-                                .position(x: x, y: y)
+                                ZStack {
+                                    if isSelected {
+                                        Text("\(point.value)")
+                                            .font(.system(size: 12, weight: .semibold))
+                                            .foregroundColor(.primary)
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 4)
+                                            .background(
+                                                Capsule()
+                                                    .fill(Color.white)
+                                                    .shadow(color: Color.black.opacity(0.12), radius: 4, x: 0, y: 2)
+                                            )
+                                            .overlay(
+                                                Capsule()
+                                                    .stroke(appTealColor.opacity(0.35), lineWidth: 0.6)
+                                            )
+                                            .offset(y: -32)
+                                    }
 
-                            Text("\(entry.value)")
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundColor(.secondary)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 4)
-                                .background(
-                                    Capsule()
+                                    Circle()
                                         .fill(Color.white.opacity(0.85))
-                                )
-                                .overlay(
-                                    Capsule()
-                                        .stroke(appTealColor.opacity(0.25), lineWidth: 0.5)
-                                )
-                                .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
-                                .baselineOffset(-6)
-                                .position(x: x, y: max(y - 32, 0))
-                        }
-                    }
+                                        .frame(width: isSelected ? 20 : 18, height: isSelected ? 20 : 18)
+                                        .shadow(color: appTealColor.opacity(0.3), radius: 6, x: 0, y: 2)
 
-                    ForEach(tickDays.filter { $0 <= data.count }, id: \.self) { day in
-                        let index = day - 1
-                        let x = spacing * CGFloat(index) + spacing / 2
-                        Text("\(day)")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                            .position(x: x, y: chartHeight + 12)
+                                    Circle()
+                                        .fill(appTealColor)
+                                        .frame(width: isSelected ? 12 : 10, height: isSelected ? 12 : 10)
+                                }
+                                .position(x: x, y: y)
+                            }
+
+                        Rectangle()
+                            .fill(Color.clear)
+                            .contentShape(Rectangle())
+                            .gesture(
+                                DragGesture(minimumDistance: 0)
+                                    .onChanged { value in
+                                        guard !pointPositions.isEmpty else { return }
+                                        let threshold = max(min(spacing / 2, 28), 24)
+                                        let combined = zip(plottedPoints, pointPositions)
+                                        if let nearest = combined.min(by: { lhs, rhs in
+                                            abs(lhs.1 - value.location.x) < abs(rhs.1 - value.location.x)
+                                        }), abs(nearest.1 - value.location.x) <= threshold {
+                                            selectedPointIndex = nearest.0.offset
+                                        }
+                                    }
+                                    .onEnded { value in
+                                        guard !pointPositions.isEmpty else { return }
+                                        let threshold = max(min(spacing / 2, 28), 24)
+                                        let combined = zip(plottedPoints, pointPositions)
+                                        if let nearest = combined.min(by: { lhs, rhs in
+                                            abs(lhs.1 - value.location.x) < abs(rhs.1 - value.location.x)
+                                        }), abs(nearest.1 - value.location.x) <= threshold {
+                                            selectedPointIndex = nearest.0.offset
+                                        } else {
+                                            selectedPointIndex = nil
+                                        }
+                                    }
+                            )
+                        }
+
+                        ForEach(tickDays.filter { $0 <= data.count }, id: \.self) { day in
+                            let index = day - 1
+                            let x = spacing * CGFloat(index) + spacing / 2
+                            Text("\(day)")
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
+                                .position(x: x, y: chartHeight + 12)
+                        }
                     }
                 }
             }
             .frame(height: 200)
             .padding(.bottom, 6)
-        }
 
             // Stats
             HStack(spacing: 20) {
@@ -463,7 +488,6 @@ private struct MonthlyProgressChart: View {
         .cardStyle(cornerRadius: 24)
     }
 }
-
 private struct ProgressOverviewView: View {
     @ObservedObject var bookStore: WordBookStore
     @ObservedObject var progressStore: SectionProgressStore
