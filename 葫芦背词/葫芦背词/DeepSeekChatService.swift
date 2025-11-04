@@ -87,16 +87,62 @@ final class DeepSeekChatService {
             }
 
             let message: Message
+            let finishReason: String?
+
+            enum CodingKeys: String, CodingKey {
+                case message
+                case finishReason = "finish_reason"
+            }
         }
 
         let choices: [Choice]
     }
+
+    private let continuationPrompt = "请从上次中断的地方继续回答，保持相同的语言和格式，不要重复已经输出的内容。"
+    private let maxContinuationSegments = 6
 
     func send(messages: [AIChatMessage]) async throws -> AIChatMessage {
         guard let apiKey = Secrets.shared.deepSeekAPIKey, !apiKey.isEmpty else {
             throw DeepSeekChatServiceError.missingAPIKey
         }
 
+        var conversation = messages
+        var aggregatedContent = ""
+        var segments = 0
+
+        while segments < maxContinuationSegments {
+            let choice = try await performRequest(messages: conversation, apiKey: apiKey)
+            aggregatedContent += choice.message.content
+
+            let finishReason = choice.finishReason?.lowercased()
+            guard finishReason == "length" else {
+                break
+            }
+
+            conversation.append(
+                AIChatMessage(role: .assistant, content: choice.message.content)
+            )
+            conversation.append(
+                AIChatMessage(role: .user, content: continuationPrompt)
+            )
+            segments += 1
+        }
+
+        if aggregatedContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            throw DeepSeekChatServiceError.missingMessage
+        }
+
+        if segments >= maxContinuationSegments {
+            aggregatedContent += "\n\n（提示：回复极长，已自动续写多次。如需继续，请告诉我“继续”，我会再接着输出。）"
+        }
+
+        return AIChatMessage(
+            role: .assistant,
+            content: aggregatedContent.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
+    }
+
+    private func performRequest(messages: [AIChatMessage], apiKey: String) async throws -> DeepSeekChatResponse.Choice {
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -105,13 +151,11 @@ final class DeepSeekChatService {
         let payload = DeepSeekChatRequest(
             model: model,
             messages: messages.map { DeepSeekChatRequest.Message(role: $0.role.rawValue, content: $0.content) },
-            maxTokens: 512,
+            maxTokens: nil,
             temperature: 0.7
         )
 
-        let encoder = JSONEncoder()
-        request.httpBody = try encoder.encode(payload)
-
+        request.httpBody = try JSONEncoder().encode(payload)
         let (data, response) = try await URLSession.shared.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -127,10 +171,9 @@ final class DeepSeekChatService {
         }
 
         let decoded = try JSONDecoder().decode(DeepSeekChatResponse.self, from: data)
-        guard let reply = decoded.choices.first?.message else {
+        guard let choice = decoded.choices.first else {
             throw DeepSeekChatServiceError.missingMessage
         }
-
-        return AIChatMessage(role: AIChatRole(rawValue: reply.role) ?? .assistant, content: reply.content)
+        return choice
     }
 }

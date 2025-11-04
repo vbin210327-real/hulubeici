@@ -14,7 +14,9 @@ import PhotosUI
 private let wordsPerPage = 10
 private let recycleBinRetentionInterval: TimeInterval = 30 * 24 * 60 * 60
 private let appTealColor = Color(red: 0.27, green: 0.63, blue: 0.55) // 湖绿色 #45A08C
-private let recycleBinActiveColor = Color(red: 0.99, green: 0.62, blue: 0.24) // 温暖橙色
+private let aiAccentGreen = Color(red: 0.23, green: 0.65, blue: 0.44)
+private let recentAccentBlue = Color(red: 0.24, green: 0.52, blue: 0.96)
+private let recycleBinActiveColor = Color(red: 0.86, green: 0.42, blue: 0.18)
 
 private func sanitizeUserIdentifier(_ value: String) -> String {
     let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
@@ -314,9 +316,9 @@ private struct MonthlyProgressChart: View {
                     let spacing = chartWidth / CGFloat(max(data.count, 1))
                     let tickDays = [1, 7, 14, 21, 28]
 
-                    let plottedPoints: [(offset: Int, value: Int)] = data.enumerated().compactMap { index, point in
+                    let plottedPoints: [(offset: Int, day: Int, value: Int)] = data.enumerated().compactMap { index, point in
                         guard point.words > 0 else { return nil }
-                        return (index, point.words)
+                        return (index, point.day, point.words)
                     }
                     let pointPositions = plottedPoints.map { spacing * CGFloat($0.offset) + spacing / 2 }
 
@@ -377,17 +379,21 @@ private struct MonthlyProgressChart: View {
                             }
                             .stroke(appTealColor, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
 
-                            ForEach(Array(plottedPoints.enumerated()), id: \.element.offset) { pair in
-                                let point = pair.element
-                                let index = pair.offset
-                                let x = pointPositions[index]
-                                let normalized = CGFloat(point.value) / CGFloat(maxWords)
-                                let y = chartHeight * (1 - normalized)
-                                let isSelected = selectedPointIndex == point.offset
+                        ForEach(plottedPoints.indices, id: \.self) { index in
+                            let point = plottedPoints[index]
+                            let x = pointPositions[index]
+                            let normalized = CGFloat(point.value) / CGFloat(maxWords)
+                            let y = chartHeight * (1 - normalized)
+                            let isSelected = selectedPointIndex == point.offset
 
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    selectedPointIndex = isSelected ? nil : point.offset
+                                }
+                            } label: {
                                 ZStack {
                                     if isSelected {
-                                        Text("\(point.value)")
+                                        Text("\(point.day)日 · \(point.value)")
                                             .font(.system(size: 12, weight: .semibold))
                                             .foregroundColor(.primary)
                                             .padding(.horizontal, 8)
@@ -413,8 +419,11 @@ private struct MonthlyProgressChart: View {
                                         .fill(appTealColor)
                                         .frame(width: isSelected ? 12 : 10, height: isSelected ? 12 : 10)
                                 }
-                                .position(x: x, y: y)
                             }
+                            .buttonStyle(.plain)
+                            .position(x: x, y: y)
+                            .contentShape(Rectangle().inset(by: -20))
+                        }
 
                         Rectangle()
                             .fill(Color.clear)
@@ -743,8 +752,8 @@ private struct ProfileCenterView: View {
             VStack(spacing: 24) {
                 headerCard
                 dailyStatusCard
-                recentActivityCard
                 aiAssistantCard
+                recentActivityCard
                 recycleBinCard
 
                 Button {
@@ -975,18 +984,18 @@ private struct ProfileCenterView: View {
                     subtitle: "\(recent.title)\n\(progressText)",
                     badge: "继续学习",
                     systemImage: "book.circle",
-                    accent: appTealColor
+                    accent: recentAccentBlue
                 )
             }
             .buttonStyle(.plain)
         } else {
-            ProfileInfoCard(
-                title: "最近学习",
-                subtitle: "还没有开始任何词书，去词书页挑选吧。",
-                badge: "无记录",
-                systemImage: "clock.arrow.circlepath",
-                accent: Color.gray
-            )
+                ProfileInfoCard(
+                    title: "最近学习",
+                    subtitle: "还没有开始任何词书，去词书页挑选吧。",
+                    badge: "无记录",
+                    systemImage: "clock.arrow.circlepath",
+                    accent: Color.gray
+                )
         }
     }
 
@@ -996,11 +1005,11 @@ private struct ProfileCenterView: View {
             showingAIChat = true
         } label: {
             ProfileInfoCard(
-                title: "AI 学习助手",
-                subtitle: "使用 DeepSeek Chat 模型，随时获取记忆技巧、例句和学习建议。",
+                title: "葫芦AI",
+                subtitle: "我是你的专属单词私教，帮你扫清任何词汇障碍，欢迎随时和我聊聊",
                 badge: "开始对话",
-                systemImage: "sparkles",
-                accent: appTealColor
+                systemImage: "ai.assistant.asset",
+                accent: aiAccentGreen
             )
         }
         .buttonStyle(.plain)
@@ -1483,6 +1492,7 @@ private struct ProfileSummaryChip: View {
 }
 
 private struct ProfileInfoCard: View {
+    @Environment(\.colorScheme) private var colorScheme
     let title: String
     let subtitle: String
     let badge: String?
@@ -1490,6 +1500,8 @@ private struct ProfileInfoCard: View {
     let accent: Color
 
     var body: some View {
+        let cornerRadius: CGFloat = 24
+
         VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Text(title)
@@ -1519,8 +1531,40 @@ private struct ProfileInfoCard: View {
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .cardStyle(cornerRadius: 24)
+        .background(cardBackground(cornerRadius: cornerRadius))
+        .modifier(StandardCardShadow())
     }
+
+    @ViewBuilder
+    private func cardBackground(cornerRadius: CGFloat) -> some View {
+        let base = colorScheme == .dark ? Color(UIColor.secondarySystemBackground) : Color.white
+
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .fill(base)
+            .overlay(
+                Group {
+                    if shouldApplyAccentOverlay {
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                            .fill(
+                                LinearGradient(
+                                    colors: accentOverlayColors,
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                    }
+                }
+            )
+    }
+
+    private var shouldApplyAccentOverlay: Bool { false }
+
+private var accentOverlayColors: [Color] {
+    if colorScheme == .dark {
+        return [accent.opacity(0.28), accent.opacity(0.14)]
+    }
+    return [accent.opacity(0.16), accent.opacity(0.06)]
+}
 }
 
 private struct SettingsGearIcon: View {
@@ -2081,8 +2125,50 @@ private struct CustomPieSmallSlice: Shape {
 struct TrashedWordSection: Identifiable, Codable {
     let section: WordSection
     let deletedAt: Date
-
+    let originalIndex: Int?
+    let precedingSectionID: UUID?
+    let followingSectionID: UUID?
     var id: UUID { section.id }
+
+    private enum CodingKeys: String, CodingKey {
+        case section
+        case deletedAt
+        case originalIndex
+        case precedingSectionID
+        case followingSectionID
+    }
+
+    init(
+        section: WordSection,
+        deletedAt: Date,
+        originalIndex: Int? = nil,
+        precedingSectionID: UUID? = nil,
+        followingSectionID: UUID? = nil
+    ) {
+        self.section = section
+        self.deletedAt = deletedAt
+        self.originalIndex = originalIndex
+        self.precedingSectionID = precedingSectionID
+        self.followingSectionID = followingSectionID
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        section = try container.decode(WordSection.self, forKey: .section)
+        deletedAt = try container.decode(Date.self, forKey: .deletedAt)
+        originalIndex = try container.decodeIfPresent(Int.self, forKey: .originalIndex)
+        precedingSectionID = try container.decodeIfPresent(UUID.self, forKey: .precedingSectionID)
+        followingSectionID = try container.decodeIfPresent(UUID.self, forKey: .followingSectionID)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(section, forKey: .section)
+        try container.encode(deletedAt, forKey: .deletedAt)
+        try container.encodeIfPresent(originalIndex, forKey: .originalIndex)
+        try container.encodeIfPresent(precedingSectionID, forKey: .precedingSectionID)
+        try container.encodeIfPresent(followingSectionID, forKey: .followingSectionID)
+    }
 
     func expirationDate(retentionInterval: TimeInterval = recycleBinRetentionInterval) -> Date {
         deletedAt.addingTimeInterval(retentionInterval)
@@ -2109,16 +2195,19 @@ struct TrashedWordSection: Identifiable, Codable {
 final class WordBookStore: ObservableObject {
     @Published private(set) var sections: [WordSection] = []
     @Published private(set) var trashedSections: [TrashedWordSection] = []
+    private var sectionOrder: [UUID] = []
 
     private let storageURL: URL
 
     private struct PersistedState: Codable {
         var sections: [WordSection]
         var trashedSections: [TrashedWordSection]
+        var sectionOrder: [UUID]?
 
-        init(sections: [WordSection], trashedSections: [TrashedWordSection]) {
+        init(sections: [WordSection], trashedSections: [TrashedWordSection], sectionOrder: [UUID]? = nil) {
             self.sections = sections
             self.trashedSections = trashedSections
+            self.sectionOrder = sectionOrder
         }
     }
 
@@ -2139,32 +2228,86 @@ final class WordBookStore: ObservableObject {
 
     func addSection(_ section: WordSection) {
         sections.append(section)
+        sectionOrder.append(section.id)
+        rebuildSectionsMaintainingOrder()
         save()
     }
 
     func updateSection(_ section: WordSection) {
         guard let index = sections.firstIndex(where: { $0.id == section.id }) else { return }
         sections[index] = section
+        rebuildSectionsMaintainingOrder()
         save()
     }
 
     func updateWords(for sectionID: UUID, words: [WordEntry]) {
         guard let index = sections.firstIndex(where: { $0.id == sectionID }) else { return }
         sections[index] = sections[index].updatingWords(words)
+        rebuildSectionsMaintainingOrder()
         save()
     }
 
     func deleteSection(_ section: WordSection, deletedAt: Date = Date()) {
-        sections.removeAll { $0.id == section.id }
+        var removedSection = section
+        var originalIndex: Int? = nil
+        var precedingID: UUID? = nil
+        var followingID: UUID? = nil
+
+        if let orderIndex = sectionOrder.firstIndex(of: section.id) {
+            originalIndex = orderIndex
+            if orderIndex > 0 {
+                precedingID = sectionOrder[orderIndex - 1]
+            }
+            if orderIndex + 1 < sectionOrder.count {
+                followingID = sectionOrder[orderIndex + 1]
+            }
+            sectionOrder.remove(at: orderIndex)
+        }
+
+        if let index = sections.firstIndex(where: { $0.id == section.id }) {
+            originalIndex = originalIndex ?? index
+            removedSection = sections.remove(at: index)
+        } else {
+            sections.removeAll { $0.id == section.id }
+        }
         trashedSections.removeAll { $0.id == section.id }
-        trashedSections.append(TrashedWordSection(section: section, deletedAt: deletedAt))
+        trashedSections.append(
+            TrashedWordSection(
+                section: removedSection,
+                deletedAt: deletedAt,
+                originalIndex: originalIndex,
+                precedingSectionID: precedingID,
+                followingSectionID: followingID
+            )
+        )
+        rebuildSectionsMaintainingOrder()
         save()
     }
 
     func restoreFromTrash(_ trashed: TrashedWordSection) {
         guard let index = trashedSections.firstIndex(where: { $0.id == trashed.id }) else { return }
-        let restored = trashedSections.remove(at: index).section
-        sections.append(restored)
+        let restoredItem = trashedSections.remove(at: index)
+        let restoredSection = restoredItem.section
+
+        sections.removeAll { $0.id == restoredSection.id }
+        sections.append(restoredSection)
+
+        sectionOrder.removeAll { $0 == restoredSection.id }
+
+        if let preceding = restoredItem.precedingSectionID,
+           let idx = sectionOrder.firstIndex(of: preceding) {
+            sectionOrder.insert(restoredSection.id, at: idx + 1)
+        } else if let following = restoredItem.followingSectionID,
+                  let idx = sectionOrder.firstIndex(of: following) {
+            sectionOrder.insert(restoredSection.id, at: idx)
+        } else if let originalIndex = restoredItem.originalIndex {
+            let boundedIndex = min(max(originalIndex, 0), sectionOrder.count)
+            sectionOrder.insert(restoredSection.id, at: boundedIndex)
+        } else {
+            sectionOrder.append(restoredSection.id)
+        }
+
+        rebuildSectionsMaintainingOrder()
         save()
     }
 
@@ -2192,18 +2335,22 @@ final class WordBookStore: ObservableObject {
             if let decoded = try? decoder.decode(PersistedState.self, from: data) {
                 sections = decoded.sections
                 trashedSections = decoded.trashedSections
+                sectionOrder = decoded.sectionOrder ?? decoded.sections.map(\.id)
                 loadedFromDisk = true
             } else if let legacySections = try? decoder.decode([WordSection].self, from: data) {
                 sections = legacySections
                 trashedSections = []
+                sectionOrder = legacySections.map(\.id)
                 loadedFromDisk = true
             } else {
                 sections = []
                 trashedSections = []
+                sectionOrder = []
             }
         } else {
             sections = []
             trashedSections = []
+            sectionOrder = []
         }
 
         var needsSave = false
@@ -2217,12 +2364,26 @@ final class WordBookStore: ObservableObject {
         if sections.count != originalCount {
             needsSave = true
         }
+        let filteredOrder = sectionOrder.filter { id in
+            sections.contains(where: { $0.id == id })
+        }
+        if filteredOrder.count != sectionOrder.count {
+            sectionOrder = filteredOrder
+            needsSave = true
+        }
         let bundledSections = BundledWordBookLoader.loadAll()
         for bundledSection in bundledSections {
             if !sections.contains(where: { $0.id == bundledSection.id || $0.title == bundledSection.title }) {
                 sections.append(bundledSection)
+                sectionOrder.append(bundledSection.id)
                 needsSave = true
             }
+        }
+
+        let previousOrder = sectionOrder
+        rebuildSectionsMaintainingOrder()
+        if sectionOrder != previousOrder {
+            needsSave = true
         }
 
         if needsSave || !loadedFromDisk {
@@ -2233,8 +2394,41 @@ final class WordBookStore: ObservableObject {
     private func save() {
         _ = purgeExpiredTrash()
         let encoder = JSONEncoder()
-        guard let data = try? encoder.encode(PersistedState(sections: sections, trashedSections: trashedSections)) else { return }
+        guard let data = try? encoder.encode(
+            PersistedState(
+                sections: sections,
+                trashedSections: trashedSections,
+                sectionOrder: sectionOrder
+            )
+        ) else { return }
         try? data.write(to: storageURL, options: .atomic)
+    }
+
+    private func rebuildSectionsMaintainingOrder() {
+        var seen = Set<UUID>()
+        var orderedSections: [WordSection] = []
+        var newOrder: [UUID] = []
+
+        var lookup: [UUID: WordSection] = [:]
+        for section in sections where lookup[section.id] == nil {
+            lookup[section.id] = section
+        }
+
+        for id in sectionOrder {
+            guard let section = lookup[id], !seen.contains(id) else { continue }
+            orderedSections.append(section)
+            newOrder.append(id)
+            seen.insert(id)
+        }
+
+        for section in sections where !seen.contains(section.id) {
+            orderedSections.append(section)
+            newOrder.append(section.id)
+            seen.insert(section.id)
+        }
+
+        sectionOrder = newOrder
+        sections = orderedSections
     }
 }
 
@@ -2356,7 +2550,7 @@ struct ContentView: View {
             Button("移至回收站", role: .destructive) {
                 Haptic.trigger(.heavy)
                 if let target = sectionToDelete {
-                    hideState.remove(entries: target.words)
+                    hideState.removeSection(target.id)
                     progressStore.resetProgress(for: target.id)
                     bookStore.deleteSection(target)
                 }
@@ -2903,12 +3097,13 @@ private struct SectionCardView: View {
 }
 
 private struct WordRowView: View {
+    let sectionID: UUID
     let entry: WordEntry
     @EnvironmentObject private var hideState: WordVisibilityStore
 
     var body: some View {
-        let wordVisible = hideState.isWordVisible(entry.id)
-        let meaningVisible = hideState.isMeaningVisible(entry.id)
+        let wordVisible = hideState.isWordVisible(sectionID: sectionID, entryID: entry.id)
+        let meaningVisible = hideState.isMeaningVisible(sectionID: sectionID, entryID: entry.id)
 
         HStack(alignment: .firstTextBaseline, spacing: 16) {
             Text(entry.word)
@@ -2921,12 +3116,12 @@ private struct WordRowView: View {
                     Rectangle()
                         .fill(Color.clear)
                         .contentShape(Rectangle())
-                        .onTapGesture {
-                            Haptic.trigger(.light)
-                            withAnimation(.easeInOut(duration: 0.25)) {
-                                hideState.toggleWord(id: entry.id)
-                            }
-                        }
+                                .onTapGesture {
+                                    Haptic.trigger(.light)
+                                    withAnimation(.easeInOut(duration: 0.25)) {
+                                        hideState.toggleWord(sectionID: sectionID, entryID: entry.id)
+                                    }
+                                }
                 }
 
             Text(entry.meaning)
@@ -2941,12 +3136,12 @@ private struct WordRowView: View {
                     Rectangle()
                         .fill(Color.clear)
                         .contentShape(Rectangle())
-                        .onTapGesture {
-                            Haptic.trigger(.light)
-                            withAnimation(.easeInOut(duration: 0.25)) {
-                                hideState.toggleMeaning(id: entry.id)
-                            }
-                        }
+                                .onTapGesture {
+                                    Haptic.trigger(.light)
+                                    withAnimation(.easeInOut(duration: 0.25)) {
+                                        hideState.toggleMeaning(sectionID: sectionID, entryID: entry.id)
+                                    }
+                                }
                 }
         }
         .padding(.horizontal, 16)
@@ -2982,7 +3177,7 @@ private struct WordSectionDetailView: View {
     var body: some View {
         TabView(selection: $currentPage) {
             ForEach(Array(pageEntries.enumerated()), id: \.offset) { index, entries in
-                WordPageView(entries: entries)
+                WordPageView(sectionID: section.id, entries: entries)
                     .padding(.horizontal, 20)
                     .padding(.top, 24)
                     .padding(.bottom, 32)
@@ -3065,7 +3260,9 @@ private struct WordSectionDetailView: View {
         let canMark = pageEntries.indices.contains(currentPage) && !targetReached
         let canShuffle = pageEntries.indices.contains(currentPage) && pageEntries[currentPage].count > 1
         let entries = currentPageEntries
-        let allMeaningsVisible = hideState.areAllMeaningsVisible(for: entries)
+        let hasVisibleMeaning = entries.contains { entry in
+            hideState.isMeaningVisible(sectionID: section.id, entryID: entry.id)
+        }
         let canToggleMeanings = !entries.isEmpty
 
         return [
@@ -3079,8 +3276,8 @@ private struct WordSectionDetailView: View {
             ),
             GlassDialAction(
                 slot: .trailing,
-                systemImage: allMeaningsVisible ? "eye.slash" : "eye",
-                title: allMeaningsVisible ? "隐藏释义" : "显示释义",
+                systemImage: hasVisibleMeaning ? "eye.slash" : "eye",
+                title: hasVisibleMeaning ? "隐藏释义" : "显示释义",
                 highlightColor: Color(red: 1.0, green: 0.62, blue: 0.34),
                 isEnabled: canToggleMeanings,
                 handler: toggleCurrentPageMeaningsVisibility
@@ -3144,20 +3341,24 @@ private struct WordSectionDetailView: View {
     private func toggleCurrentPageMeaningsVisibility() {
         let entries = currentPageEntries
         guard !entries.isEmpty else { return }
-        let allVisible = hideState.areAllMeaningsVisible(for: entries)
-        hideState.setMeaningVisibility(visible: !allVisible, for: entries)
+        let entryIDs = entries.map(\.id)
+        let hasVisibleMeaning = entryIDs.contains { hideState.isMeaningVisible(sectionID: section.id, entryID: $0) }
+        withAnimation(.easeInOut(duration: 0.2)) {
+            hideState.setMeaningVisibility(visible: !hasVisibleMeaning, entryIDs: entryIDs, sectionID: section.id)
+        }
     }
 }
 
 private struct WordPageView: View {
+    let sectionID: UUID
     let entries: [WordEntry]
     @EnvironmentObject private var hideState: WordVisibilityStore
 
     var body: some View {
         ScrollView {
             VStack(spacing: 18) {
-                ForEach(entries) { entry in
-                    WordRowView(entry: entry)
+                ForEach(entries, id: \.id) { entry in
+                    WordRowView(sectionID: sectionID, entry: entry)
                         .environmentObject(hideState)
                         .background(
                             RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -4520,7 +4721,12 @@ final class UserProfileStore: ObservableObject {
 }
 
 final class WordVisibilityStore: ObservableObject {
-    @Published private var visibility: [UUID: EntryVisibility] = [:] {
+    struct Snapshot: Codable {
+        var hiddenWordIDs: [UUID: Set<UUID>] = [:]
+        var hiddenMeaningIDs: [UUID: Set<UUID>] = [:]
+    }
+
+    @Published private var snapshot = Snapshot() {
         didSet { persist() }
     }
 
@@ -4535,99 +4741,104 @@ final class WordVisibilityStore: ObservableObject {
         loadInitialState()
     }
 
-    func isWordVisible(_ id: UUID) -> Bool {
-        visibility[id]?.showWord ?? true
+    func isWordVisible(sectionID: UUID, entryID: UUID) -> Bool {
+        !(snapshot.hiddenWordIDs[sectionID]?.contains(entryID) ?? false)
     }
 
-    func isMeaningVisible(_ id: UUID) -> Bool {
-        visibility[id]?.showMeaning ?? true
+    func isMeaningVisible(sectionID: UUID, entryID: UUID) -> Bool {
+        !(snapshot.hiddenMeaningIDs[sectionID]?.contains(entryID) ?? false)
     }
 
-    func toggleWord(id: UUID) {
-        var entry = visibility[id] ?? EntryVisibility()
-        entry.showWord.toggle()
-        if entry.showWord && entry.showMeaning {
-            visibility.removeValue(forKey: id)
-        } else {
-            visibility[id] = entry
-        }
+    func toggleWord(sectionID: UUID, entryID: UUID) {
+        let shouldHide = isWordVisible(sectionID: sectionID, entryID: entryID)
+        setWordHidden(sectionID: sectionID, entryIDs: [entryID], hidden: shouldHide)
     }
 
-    func toggleMeaning(id: UUID) {
-        var entry = visibility[id] ?? EntryVisibility()
-        entry.showMeaning.toggle()
-        if entry.showWord && entry.showMeaning {
-            visibility.removeValue(forKey: id)
-        } else {
-            visibility[id] = entry
-        }
+    func toggleMeaning(sectionID: UUID, entryID: UUID) {
+        let shouldHide = isMeaningVisible(sectionID: sectionID, entryID: entryID)
+        setMeaningHidden(sectionID: sectionID, entryIDs: [entryID], hidden: shouldHide)
     }
 
-    func areAllMeaningsVisible(for entries: [WordEntry]) -> Bool {
-        entries.allSatisfy { isMeaningVisible($0.id) }
+    func setMeaningVisibility(visible: Bool, entryIDs: [UUID], sectionID: UUID) {
+        guard !entryIDs.isEmpty else { return }
+        setMeaningHidden(sectionID: sectionID, entryIDs: entryIDs, hidden: !visible)
     }
 
-    func setMeaningVisibility(visible: Bool, for entries: [WordEntry]) {
-        guard !entries.isEmpty else { return }
-        var newVisibility = visibility
-        var didChange = false
-        for entry in entries {
-            let currentValue = newVisibility[entry.id] ?? EntryVisibility()
-            var updatedValue = currentValue
-            updatedValue.showMeaning = visible
-            if updatedValue.showWord && updatedValue.showMeaning {
-                if newVisibility.removeValue(forKey: entry.id) != nil {
-                    didChange = true
-                }
-            } else {
-                if newVisibility[entry.id] != updatedValue {
-                    newVisibility[entry.id] = updatedValue
-                    didChange = true
-                }
-            }
-        }
-        if didChange {
-            visibility = newVisibility
-        }
-    }
-
-    fileprivate func remove(entries: [WordEntry]) {
-        guard !entries.isEmpty else { return }
-        var newVisibility = visibility
-        var didChange = false
-        for entry in entries {
-            if newVisibility.removeValue(forKey: entry.id) != nil {
-                didChange = true
-            }
-        }
-        if didChange {
-            visibility = newVisibility
-        }
+    fileprivate func removeSection(_ sectionID: UUID) {
+        var snapshot = self.snapshot
+        snapshot.hiddenWordIDs.removeValue(forKey: sectionID)
+        snapshot.hiddenMeaningIDs.removeValue(forKey: sectionID)
+        self.snapshot = snapshot
     }
 
     func resetAll() {
-        if !visibility.isEmpty {
-            visibility.removeAll()
-        }
+        snapshot = Snapshot()
     }
 
     fileprivate func reconcile(previous: WordSection, updated: WordSection) {
-        let updatedIDs = Set(updated.words.map(\.id))
-        var newVisibility = visibility
-        var didChange = false
-        for word in previous.words where !updatedIDs.contains(word.id) {
-            if newVisibility.removeValue(forKey: word.id) != nil {
-                didChange = true
+        let sectionID = previous.id
+        let validEntryIDs = Set(updated.words.map(\.id))
+
+        var snapshot = self.snapshot
+
+        if let existingWordSet = snapshot.hiddenWordIDs[sectionID] {
+            let filtered = existingWordSet.intersection(validEntryIDs)
+            if filtered.isEmpty {
+                snapshot.hiddenWordIDs.removeValue(forKey: sectionID)
+            } else {
+                snapshot.hiddenWordIDs[sectionID] = filtered
             }
         }
-        if didChange {
-            visibility = newVisibility
+
+        if let existingMeaningSet = snapshot.hiddenMeaningIDs[sectionID] {
+            let filtered = existingMeaningSet.intersection(validEntryIDs)
+            if filtered.isEmpty {
+                snapshot.hiddenMeaningIDs.removeValue(forKey: sectionID)
+            } else {
+                snapshot.hiddenMeaningIDs[sectionID] = filtered
+            }
         }
+
+        self.snapshot = snapshot
+    }
+
+    private func setWordHidden(sectionID: UUID, entryIDs: [UUID], hidden: Bool) {
+        guard !entryIDs.isEmpty else { return }
+        var snapshot = self.snapshot
+        var set = snapshot.hiddenWordIDs[sectionID] ?? []
+        if hidden {
+            set.formUnion(entryIDs)
+        } else {
+            set.subtract(entryIDs)
+        }
+        if set.isEmpty {
+            snapshot.hiddenWordIDs.removeValue(forKey: sectionID)
+        } else {
+            snapshot.hiddenWordIDs[sectionID] = set
+        }
+        self.snapshot = snapshot
+    }
+
+    private func setMeaningHidden(sectionID: UUID, entryIDs: [UUID], hidden: Bool) {
+        guard !entryIDs.isEmpty else { return }
+        var snapshot = self.snapshot
+        var set = snapshot.hiddenMeaningIDs[sectionID] ?? []
+        if hidden {
+            set.formUnion(entryIDs)
+        } else {
+            set.subtract(entryIDs)
+        }
+        if set.isEmpty {
+            snapshot.hiddenMeaningIDs.removeValue(forKey: sectionID)
+        } else {
+            snapshot.hiddenMeaningIDs[sectionID] = set
+        }
+        self.snapshot = snapshot
     }
 
     private func persist() {
         guard !isRestoring else { return }
-        if let data = try? JSONEncoder().encode(visibility) {
+        if let data = try? JSONEncoder().encode(snapshot) {
             defaults.set(data, forKey: defaultsKey)
         }
     }
@@ -4636,10 +4847,10 @@ final class WordVisibilityStore: ObservableObject {
         var migratedFromLegacy = false
 
         if let data = defaults.data(forKey: defaultsKey),
-           decodeVisibility(from: data) {
+           decodeSnapshot(from: data) {
             return
         } else if let legacyData = defaults.data(forKey: Self.legacyDefaultsKey),
-                  decodeVisibility(from: legacyData) {
+                  decodeLegacy(from: legacyData) {
             migratedFromLegacy = true
         }
 
@@ -4650,23 +4861,47 @@ final class WordVisibilityStore: ObservableObject {
     }
 
     @discardableResult
-    private func decodeVisibility(from data: Data) -> Bool {
+    private func decodeSnapshot(from data: Data) -> Bool {
         let decoder = JSONDecoder()
-        if let decoded = try? decoder.decode([UUID: EntryVisibility].self, from: data) {
+        if let decoded = try? decoder.decode(Snapshot.self, from: data) {
             isRestoring = true
-            visibility = decoded
+            snapshot = decoded
             isRestoring = false
+            return true
+        }
+        if let _ = try? decoder.decode(SnapshotV2Indices.self, from: data) {
+            isRestoring = true
+            snapshot = Snapshot()
+            isRestoring = false
+            persist()
             return true
         }
         return false
     }
 
-    struct EntryVisibility: Codable, Equatable {
+    @discardableResult
+    private func decodeLegacy(from data: Data) -> Bool {
+        let decoder = JSONDecoder()
+        if (try? decoder.decode([UUID: EntryVisibility].self, from: data)) != nil {
+            isRestoring = true
+            snapshot = Snapshot()
+            isRestoring = false
+            persist()
+            return true
+        }
+        return false
+    }
+
+    private struct EntryVisibility: Codable, Equatable {
         var showWord: Bool = true
         var showMeaning: Bool = true
     }
-}
 
+    private struct SnapshotV2Indices: Codable {
+        var hiddenWordIndices: [UUID: Set<Int>] = [:]
+        var hiddenMeaningIndices: [UUID: Set<Int>] = [:]
+    }
+}
 private extension Array {
     func chunked(into size: Int) -> [[Element]] {
         guard size > 0 else { return [Array(self)] }
@@ -4898,6 +5133,11 @@ private struct ProfileInfoIcon: View {
                 TrashShape()
                     .stroke(accent, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
                     .frame(width: 28, height: 28)
+            } else if systemImage == "ai.assistant.asset" {
+                Image("AIAssistant")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 36, height: 36)
             } else {
                 Image(systemName: systemImage)
                     .font(.system(size: 24, weight: .semibold))
@@ -4906,9 +5146,19 @@ private struct ProfileInfoIcon: View {
         }
         .frame(width: 44, height: 44)
         .background(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(accent.opacity(0.4))
-            )
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(iconBackgroundColor)
+        )
+    }
+
+    private var iconBackgroundColor: Color {
+        if systemImage == "ai.assistant.asset" {
+            return accent.opacity(0.12)
+        }
+        if systemImage == "trash" {
+            return accent.opacity(0.14)
+        }
+        return accent.opacity(0.12)
     }
 }
 
