@@ -87,6 +87,8 @@ garden [ˈɡɑːd(ə)n] n. 花园，果园，菜园
 ```
 
 Bundled vocabulary sets:
+- `2 中考-乱序.txt` - Middle school (CET-4 prep) vocabulary
+- `3 四级-乱序.txt` - CET-4 vocabulary
 - `highschool3500_shuffled.txt` - High school vocabulary (3500 words)
 - `4 六级-乱序.txt` - CET-6 vocabulary
 - `5 考研-乱序.txt` - Graduate entrance exam vocabulary

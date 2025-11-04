@@ -2373,9 +2373,49 @@ final class WordBookStore: ObservableObject {
         }
         let bundledSections = BundledWordBookLoader.loadAll()
         for bundledSection in bundledSections {
-            if !sections.contains(where: { $0.id == bundledSection.id || $0.title == bundledSection.title }) {
+            if let index = sections.firstIndex(where: { $0.id == bundledSection.id }) {
+                let existing = sections[index]
+                if existing.words != bundledSection.words || existing.subtitle != bundledSection.subtitle || existing.title != bundledSection.title {
+                    sections[index] = WordSection(
+                        id: existing.id,
+                        title: bundledSection.title,
+                        subtitle: bundledSection.subtitle,
+                        words: bundledSection.words,
+                        targetPasses: bundledSection.targetPasses
+                    )
+                    needsSave = true
+                }
+            } else if let index = sections.firstIndex(where: { $0.title == bundledSection.title }) {
+                let existing = sections[index]
+                if existing.words != bundledSection.words || existing.subtitle != bundledSection.subtitle {
+                    sections[index] = WordSection(
+                        id: existing.id,
+                        title: bundledSection.title,
+                        subtitle: bundledSection.subtitle,
+                        words: bundledSection.words,
+                        targetPasses: bundledSection.targetPasses
+                    )
+                    needsSave = true
+                }
+            } else {
                 sections.append(bundledSection)
                 sectionOrder.append(bundledSection.id)
+                needsSave = true
+            }
+        }
+
+        let priorityMetadata = Array(BundledWordBookLoader.bundledSectionMetadata.reversed())
+        for (descriptorID, title) in priorityMetadata {
+            guard let section = sections.first(where: { $0.id == descriptorID }) ?? sections.first(where: { $0.title == title }) else { continue }
+            let id = section.id
+            if let existingIndex = sectionOrder.firstIndex(of: id) {
+                if existingIndex != 0 {
+                    sectionOrder.remove(at: existingIndex)
+                    sectionOrder.insert(id, at: 0)
+                    needsSave = true
+                }
+            } else {
+                sectionOrder.insert(id, at: 0)
                 needsSave = true
             }
         }
@@ -3252,6 +3292,7 @@ private struct WordSectionDetailView: View {
             progressStore.recordStudyEvent(for: newValue)
             didLoadInitialPage = false
             activeDialAction = nil
+            meaningOverrides.removeAll()
         }
         .onChange(of: section.words) { _, newWords in
             let pages = newWords.chunked(into: wordsPerPage)
@@ -3260,9 +3301,11 @@ private struct WordSectionDetailView: View {
             currentPage = min(currentPage, max(pages.count - 1, 0))
             activeDialAction = nil
             enforceForwardOnlyNavigation(for: currentPage)
+            meaningOverrides.removeAll()
         }
         .onChange(of: currentPage) { _, newValue in
             enforceForwardOnlyNavigation(for: newValue)
+            meaningOverrides.removeAll()
         }
     }
 
@@ -3330,6 +3373,7 @@ private struct WordSectionDetailView: View {
         }
         let flattened = pageEntries.flatMap { $0 }
         onUpdateWords(section.id, flattened)
+        meaningOverrides.removeAll()
     }
 
     private var currentPageEntries: [WordEntry] {
@@ -4985,9 +5029,19 @@ private enum BundledWordBookLoader {
     private static let resourceExtension = "txt"
     private static let descriptors: [ResourceDescriptor] = [
         .init(
+            fileName: "2 中考-乱序",
+            title: "中考词汇乱序",
+            sectionID: UUID(uuidString: "6F359567-8327-4C5D-870A-528A2B5A5364")!
+        ),
+        .init(
             fileName: "highschool3500_shuffled",
             title: "高中英语词汇3500乱序",
             sectionID: UUID(uuidString: "095D66A2-6E17-42A3-B0FA-9022D3AD4398")!
+        ),
+        .init(
+            fileName: "3 四级-乱序",
+            title: "四级词汇乱序",
+            sectionID: UUID(uuidString: "D97EDF4D-C9C7-42DF-87B1-69FB0FABE11F")!
         ),
         .init(
             fileName: "4 六级-乱序",
@@ -5005,6 +5059,10 @@ private enum BundledWordBookLoader {
             sectionID: UUID(uuidString: "A2E1E629-189A-4D38-BC86-1B96E989F24C")!
         )
     ]
+
+    static var bundledSectionMetadata: [(id: UUID, title: String)] {
+        descriptors.map { ($0.sectionID, $0.title) }
+    }
 
     static func loadAll() -> [WordSection] {
         descriptors.compactMap { descriptor in
