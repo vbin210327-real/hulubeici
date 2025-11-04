@@ -3099,11 +3099,14 @@ private struct SectionCardView: View {
 private struct WordRowView: View {
     let sectionID: UUID
     let entry: WordEntry
+    let meaningOverride: Bool?
+    let onMeaningTapped: (UUID) -> Void
     @EnvironmentObject private var hideState: WordVisibilityStore
 
     var body: some View {
         let wordVisible = hideState.isWordVisible(sectionID: sectionID, entryID: entry.id)
-        let meaningVisible = hideState.isMeaningVisible(sectionID: sectionID, entryID: entry.id)
+        let meaningVisibleBase = hideState.isMeaningVisible(sectionID: sectionID, entryID: entry.id)
+        let meaningVisible = meaningOverride ?? meaningVisibleBase
 
         HStack(alignment: .firstTextBaseline, spacing: 16) {
             Text(entry.word)
@@ -3141,6 +3144,7 @@ private struct WordRowView: View {
                                     withAnimation(.easeInOut(duration: 0.25)) {
                                         hideState.toggleMeaning(sectionID: sectionID, entryID: entry.id)
                                     }
+                                    onMeaningTapped(entry.id)
                                 }
                 }
         }
@@ -3169,6 +3173,7 @@ private struct WordSectionDetailView: View {
     @State private var currentPage: Int = 0
     @State private var didLoadInitialPage = false
     @State private var activeDialAction: GlassDialAction?
+    @State private var meaningOverrides: [UUID: Bool] = [:]
 
     private var progressState: SectionProgressStore.ProgressState {
         progressStore.progress(for: section.id)
@@ -3177,7 +3182,14 @@ private struct WordSectionDetailView: View {
     var body: some View {
         TabView(selection: $currentPage) {
             ForEach(Array(pageEntries.enumerated()), id: \.offset) { index, entries in
-                WordPageView(sectionID: section.id, entries: entries)
+                WordPageView(
+                    sectionID: section.id,
+                    entries: entries,
+                    meaningOverrides: meaningOverrides,
+                    onMeaningTapped: { id in
+                        meaningOverrides.removeValue(forKey: id)
+                    }
+                )
                     .padding(.horizontal, 20)
                     .padding(.top, 24)
                     .padding(.bottom, 32)
@@ -3341,10 +3353,37 @@ private struct WordSectionDetailView: View {
     private func toggleCurrentPageMeaningsVisibility() {
         let entries = currentPageEntries
         guard !entries.isEmpty else { return }
-        let entryIDs = entries.map(\.id)
-        let hasVisibleMeaning = entryIDs.contains { hideState.isMeaningVisible(sectionID: section.id, entryID: $0) }
+        let entryIDsSet = Set(entries.map(\.id))
+        let entryIDs = Array(entryIDsSet)
+        let targetVisibility = !entryIDs.contains { hideState.isMeaningVisible(sectionID: section.id, entryID: $0) }
+
+        for id in entryIDsSet {
+            meaningOverrides[id] = targetVisibility
+        }
+
         withAnimation(.easeInOut(duration: 0.2)) {
-            hideState.setMeaningVisibility(visible: !hasVisibleMeaning, entryIDs: entryIDs, sectionID: section.id)
+            hideState.setMeaningVisibility(visible: targetVisibility, entryIDs: entryIDs, sectionID: section.id)
+        }
+
+        Task { @MainActor in
+            var pending = entryIDs
+            var attempts = 4
+            while attempts > 0 {
+                if pending.isEmpty { break }
+                pending = pending.filter { hideState.isMeaningVisible(sectionID: section.id, entryID: $0) != targetVisibility }
+                if pending.isEmpty { break }
+                attempts -= 1
+                hideState.setMeaningVisibility(visible: targetVisibility, entryIDs: pending, sectionID: section.id)
+                try? await Task.sleep(nanoseconds: 50_000_000)
+            }
+            let pendingSet = Set(pending)
+            let resolved = entryIDsSet.subtracting(pendingSet)
+            for id in resolved {
+                if meaningOverrides[id] == targetVisibility {
+                    meaningOverrides.removeValue(forKey: id)
+                }
+            }
+            // if still pending after retries, keep overrides so UI stays consistent
         }
     }
 }
@@ -3352,13 +3391,16 @@ private struct WordSectionDetailView: View {
 private struct WordPageView: View {
     let sectionID: UUID
     let entries: [WordEntry]
+    let meaningOverrides: [UUID: Bool]
+    let onMeaningTapped: (UUID) -> Void
     @EnvironmentObject private var hideState: WordVisibilityStore
 
     var body: some View {
         ScrollView {
             VStack(spacing: 18) {
                 ForEach(entries, id: \.id) { entry in
-                    WordRowView(sectionID: sectionID, entry: entry)
+                    let override = meaningOverrides[entry.id]
+                    WordRowView(sectionID: sectionID, entry: entry, meaningOverride: override, onMeaningTapped: onMeaningTapped)
                         .environmentObject(hideState)
                         .background(
                             RoundedRectangle(cornerRadius: 16, style: .continuous)
