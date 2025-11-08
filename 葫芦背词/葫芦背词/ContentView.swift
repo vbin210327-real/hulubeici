@@ -744,6 +744,7 @@ private struct ProfileCenterView: View {
     @State private var photoPickerItem: PhotosPickerItem?
     @State private var showingRecycleBin = false
     @State private var showingAIChat = false
+    @State private var showingAvatarEditor = false
 
     private let emojiOptions = ["🎓", "📚", "✏️", "📖", "🌟", "💡", "🚀", "🎯", "🏆", "💪", "🔥", "⚡️", "🌈", "🎨", "🎭", "🎪"]
 
@@ -916,26 +917,16 @@ private struct ProfileCenterView: View {
     }
 
     private var avatarSelector: some View {
-        Menu {
-            Button("从相册选择头像") {
-                Haptic.trigger(.light)
-                showPhotoPicker = true
-            }
-            Button("选择表情头像") {
-                Haptic.trigger(.light)
-                showingEmojiPicker = true
-                userProfile.avatarImageData = nil
-            }
-            if userProfile.avatarImageData != nil {
-                Button("恢复默认表情", role: .destructive) {
-                    Haptic.trigger(.light)
-                    userProfile.avatarImageData = nil
-                }
-            }
-        } label: {
+        Button(action: {
+            Haptic.trigger(.light)
+            showingAvatarEditor = true
+        }) {
             avatarDisplay
         }
-        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .fullScreenCover(isPresented: $showingAvatarEditor) {
+            AvatarEditView(avatarImageData: $userProfile.avatarImageData)
+        }
     }
 
     private var avatarDisplay: some View {
@@ -4831,6 +4822,9 @@ final class UserProfileStore: ObservableObject {
             let response = try await APIService.shared.getProfile()
 
             await MainActor.run {
+                print("📥 Loaded profile from backend:")
+                print("  - Name: \(response.profile.displayName)")
+                print("  - Emoji: \(response.profile.avatarEmoji)")
                 self.userName = response.profile.displayName
                 self.avatarEmoji = response.profile.avatarEmoji
             }
@@ -4838,6 +4832,9 @@ final class UserProfileStore: ObservableObject {
             print("✅ Profile loaded from backend")
         } catch {
             print("❌ Failed to load profile from backend: \(error)")
+            if let networkError = error as? NetworkError {
+                print("   Error details: \(networkError.localizedDescription)")
+            }
         }
     }
 
@@ -4863,8 +4860,13 @@ final class UserProfileStore: ObservableObject {
                     avatarEmoji: avatarEmoji
                 )
                 print("✅ Profile synced to backend")
+                print("  - Synced Name: \(userName)")
+                print("  - Synced Emoji: \(avatarEmoji)")
             } catch {
                 print("❌ Failed to sync profile to backend: \(error)")
+                if let networkError = error as? NetworkError {
+                    print("   Error details: \(networkError.localizedDescription)")
+                }
             }
         }
     }
