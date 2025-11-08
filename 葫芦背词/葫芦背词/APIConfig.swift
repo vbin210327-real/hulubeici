@@ -2,7 +2,7 @@ import Foundation
 
 enum APIConfig {
     // Backend API base URL
-    static let baseURL = "https://hulu-beici-backend-djige2moj-links-projects-570aaf31.vercel.app"
+    static let baseURL = "https://hulu-beici-backend-248x9h07b-links-projects-570aaf31.vercel.app"
 
     // API endpoints
     enum Endpoints {
