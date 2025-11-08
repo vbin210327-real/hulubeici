@@ -116,7 +116,7 @@ class NetworkClient {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
         // Add auth token if available
-        if let accessToken = AuthSessionStore.shared.session?.accessToken {
+        if let accessToken = getAccessToken() {
             request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         }
 
@@ -126,6 +126,16 @@ class NetworkClient {
                 request.setValue(value, forHTTPHeaderField: key)
             }
         }
+    }
+
+    private func getAccessToken() -> String? {
+        // Read session from UserDefaults
+        let storageKey = "SupabaseAuthSession.v1"
+        guard let data = UserDefaults.standard.data(forKey: storageKey),
+              let session = try? JSONDecoder().decode(AuthSession.self, from: data) else {
+            return nil
+        }
+        return session.accessToken
     }
 
     private func performRequest<T: Decodable>(_ request: URLRequest) async throws -> T {
