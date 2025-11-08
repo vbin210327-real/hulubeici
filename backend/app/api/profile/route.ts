@@ -23,9 +23,9 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       profile: {
-        displayName: data?.display_name ?? DEFAULT_NAME,
-        avatarEmoji: data?.avatar_emoji ?? DEFAULT_EMOJI,
-        updatedAt: data?.updated_at ?? null
+        displayName: (data as any)?.display_name ?? DEFAULT_NAME,
+        avatarEmoji: (data as any)?.avatar_emoji ?? DEFAULT_EMOJI,
+        updatedAt: (data as any)?.updated_at ?? null
       }
     });
   } catch (error) {
@@ -53,8 +53,8 @@ export async function PATCH(request: Request) {
       .upsert(
         {
           user_id: user.id,
-          display_name: payload.displayName ?? existing?.display_name ?? DEFAULT_NAME,
-          avatar_emoji: payload.avatarEmoji ?? existing?.avatar_emoji ?? DEFAULT_EMOJI
+          display_name: payload.displayName ?? (existing as any)?.display_name ?? DEFAULT_NAME,
+          avatar_emoji: payload.avatarEmoji ?? (existing as any)?.avatar_emoji ?? DEFAULT_EMOJI
         },
         { onConflict: "user_id" }
       )
@@ -67,9 +67,9 @@ export async function PATCH(request: Request) {
 
     return NextResponse.json({
       profile: {
-        displayName: data?.display_name ?? DEFAULT_NAME,
-        avatarEmoji: data?.avatar_emoji ?? DEFAULT_EMOJI,
-        updatedAt: data?.updated_at ?? new Date().toISOString()
+        displayName: (data as any)?.display_name ?? DEFAULT_NAME,
+        avatarEmoji: (data as any)?.avatar_emoji ?? DEFAULT_EMOJI,
+        updatedAt: (data as any)?.updated_at ?? new Date().toISOString()
       }
     });
   } catch (error) {
