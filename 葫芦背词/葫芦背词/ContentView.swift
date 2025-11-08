@@ -2507,6 +2507,10 @@ struct ContentView: View {
                     previousTab = oldValue
                     isRootView = true
                 }
+                .task {
+                    // Load user profile from backend on app launch
+                    await userProfile.loadFromBackend()
+                }
             .navigationDestination(for: UUID.self) { id in
                 if let section = bookStore.sections.first(where: { $0.id == id }) {
                     WordSectionDetailView(
@@ -4733,16 +4737,24 @@ final class DailyProgressStore: ObservableObject {
 
 final class UserProfileStore: ObservableObject {
     @Published var userName: String {
-        didSet { persist() }
+        didSet {
+            persist()
+            syncToBackend()
+        }
     }
 
     @Published var avatarEmoji: String {
-        didSet { persist() }
+        didSet {
+            persist()
+            syncToBackend()
+        }
     }
 
     @Published var avatarImageData: Data? {
         didSet { persist() }
     }
+
+    @Published var isSyncing: Bool = false
 
     private let defaults: UserDefaults
     private let nameKey: String
@@ -4751,6 +4763,9 @@ final class UserProfileStore: ObservableObject {
     private static let legacyNameKey = "UserProfileStore.name"
     private static let legacyEmojiKey = "UserProfileStore.emoji"
     private static let legacyImageKey = "UserProfileStore.avatarImage"
+
+    private var syncTask: Task<Void, Never>?
+    private var isLoadingFromBackend = false
 
     init(userId: String, userDefaults: UserDefaults = .standard) {
         self.defaults = userDefaults
@@ -4802,6 +4817,55 @@ final class UserProfileStore: ObservableObject {
             defaults.set(data, forKey: imageKey)
         } else {
             defaults.removeObject(forKey: imageKey)
+        }
+    }
+
+    // MARK: - Cloud Sync
+
+    /// Load profile from backend
+    func loadFromBackend() async {
+        isLoadingFromBackend = true
+        defer { isLoadingFromBackend = false }
+
+        do {
+            let response = try await APIService.shared.getProfile()
+
+            await MainActor.run {
+                self.userName = response.profile.displayName
+                self.avatarEmoji = response.profile.avatarEmoji
+            }
+
+            print("✅ Profile loaded from backend")
+        } catch {
+            print("❌ Failed to load profile from backend: \(error)")
+        }
+    }
+
+    /// Sync profile to backend (debounced)
+    private func syncToBackend() {
+        guard !isLoadingFromBackend else { return }
+
+        // Cancel previous sync task
+        syncTask?.cancel()
+
+        // Create new sync task with debounce
+        syncTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second debounce
+
+            guard !Task.isCancelled else { return }
+
+            isSyncing = true
+            defer { isSyncing = false }
+
+            do {
+                let _ = try await APIService.shared.updateProfile(
+                    displayName: userName,
+                    avatarEmoji: avatarEmoji
+                )
+                print("✅ Profile synced to backend")
+            } catch {
+                print("❌ Failed to sync profile to backend: \(error)")
+            }
         }
     }
 }
