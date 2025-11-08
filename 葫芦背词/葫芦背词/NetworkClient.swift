@@ -57,7 +57,7 @@ class NetworkClient {
         let url = try buildURL(endpoint)
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        addHeaders(to: &request, additional: headers)
+        try await addHeaders(to: &request, additional: headers)
 
         return try await performRequest(request)
     }
@@ -71,7 +71,7 @@ class NetworkClient {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.httpBody = try encoder.encode(body)
-        addHeaders(to: &request, additional: headers)
+        try await addHeaders(to: &request, additional: headers)
 
         return try await performRequest(request)
     }
@@ -85,7 +85,7 @@ class NetworkClient {
         var request = URLRequest(url: url)
         request.httpMethod = "PATCH"
         request.httpBody = try encoder.encode(body)
-        addHeaders(to: &request, additional: headers)
+        try await addHeaders(to: &request, additional: headers)
 
         return try await performRequest(request)
     }
@@ -97,7 +97,7 @@ class NetworkClient {
         let url = try buildURL(endpoint)
         var request = URLRequest(url: url)
         request.httpMethod = "DELETE"
-        addHeaders(to: &request, additional: headers)
+        try await addHeaders(to: &request, additional: headers)
 
         return try await performRequest(request)
     }
@@ -111,12 +111,12 @@ class NetworkClient {
         return url
     }
 
-    private func addHeaders(to request: inout URLRequest, additional: [String: String]?) {
+    private func addHeaders(to request: inout URLRequest, additional: [String: String]?) async throws {
         // Add content type
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
         // Add auth token if available
-        if let accessToken = getAccessToken() {
+        if let accessToken = try await getAccessToken() {
             request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         }
 
@@ -128,23 +128,64 @@ class NetworkClient {
         }
     }
 
-    private func getAccessToken() -> String? {
+    private func getAccessToken() async throws -> String? {
         // Read session from UserDefaults
         let storageKey = "SupabaseAuthSession.v1"
-        guard let data = UserDefaults.standard.data(forKey: storageKey),
-              let session = try? JSONDecoder().decode(AuthSession.self, from: data) else {
+        guard let data = UserDefaults.standard.data(forKey: storageKey) else {
+            print("🔐 No session data found in UserDefaults")
             return nil
         }
+
+        guard var session = try? JSONDecoder().decode(AuthSession.self, from: data) else {
+            print("🔐 Failed to decode session from UserDefaults")
+            return nil
+        }
+
+        // Check if token is expired or expiring soon (within 5 minutes)
+        let expiryThreshold = Date().addingTimeInterval(300) // 5 minutes
+        if session.expiresAt <= expiryThreshold {
+            print("⚠️ Access token is expired or expiring soon. Attempting refresh...")
+
+            // Attempt to refresh the token
+            do {
+                let authService = SupabaseAuthService()
+                let newSession = try await authService.refreshToken(refreshToken: session.refreshToken)
+
+                // Save the new session
+                if let encodedSession = try? JSONEncoder().encode(newSession) {
+                    UserDefaults.standard.set(encodedSession, forKey: storageKey)
+                    print("✅ Token refreshed successfully")
+                }
+
+                session = newSession
+            } catch {
+                print("❌ Failed to refresh token: \(error.localizedDescription)")
+                // Return nil to trigger 401 error
+                return nil
+            }
+        }
+
+        print("🔐 Access token found: \(session.accessToken.prefix(20))...")
         return session.accessToken
     }
 
     private func performRequest<T: Decodable>(_ request: URLRequest) async throws -> T {
         do {
+            // Log request details
+            print("🌐 Request: \(request.httpMethod ?? "?") \(request.url?.absoluteString ?? "?")")
+            if let authHeader = request.value(forHTTPHeaderField: "Authorization") {
+                print("🌐 Auth: \(authHeader.prefix(30))...")
+            } else {
+                print("🌐 Auth: None")
+            }
+
             let (data, response) = try await session.data(for: request)
 
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw NetworkError.serverError("Invalid response")
             }
+
+            print("🌐 Response: \(httpResponse.statusCode)")
 
             // Handle HTTP status codes
             switch httpResponse.statusCode {

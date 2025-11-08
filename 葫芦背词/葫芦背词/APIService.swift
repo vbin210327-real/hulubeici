@@ -33,7 +33,7 @@ class APIService {
             title: title,
             subtitle: subtitle,
             targetPasses: targetPasses,
-            entries: entries
+            words: entries
         )
         return try await client.post(APIConfig.Endpoints.wordbooks, body: payload)
     }
@@ -53,7 +53,7 @@ class APIService {
             title: title,
             subtitle: subtitle,
             targetPasses: targetPasses,
-            entries: entries
+            words: entries
         )
         return try await client.patch(APIConfig.Endpoints.wordbook(id: id), body: payload)
     }
@@ -69,7 +69,7 @@ class APIService {
     }
 
     func updateSectionProgress(items: [SectionProgressItem]) async throws -> SectionProgressResponse {
-        let payload = SectionProgressPayload(progress: items)
+        let payload = SectionProgressPayload(records: items)
         return try await client.post(APIConfig.Endpoints.sectionProgress, body: payload)
     }
 
@@ -174,14 +174,14 @@ struct CreateWordbookPayload: Codable {
     let title: String
     let subtitle: String?
     let targetPasses: Int
-    let entries: [WordEntryPayload]
+    let words: [WordEntryPayload]
 }
 
 struct UpdateWordbookPayload: Codable {
     let title: String?
     let subtitle: String?
     let targetPasses: Int?
-    let entries: [WordEntryPayload]?
+    let words: [WordEntryPayload]?
 }
 
 struct WordEntryPayload: Codable {
@@ -197,7 +197,7 @@ struct DeleteResponse: Codable {
 
 // Progress
 struct SectionProgressResponse: Codable {
-    let progress: [SectionProgressData]
+    let records: [SectionProgressData]
 }
 
 struct SectionProgressData: Codable {
@@ -208,7 +208,7 @@ struct SectionProgressData: Codable {
 }
 
 struct SectionProgressPayload: Codable {
-    let progress: [SectionProgressItem]
+    let records: [SectionProgressItem]
 }
 
 struct SectionProgressItem: Codable {

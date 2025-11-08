@@ -2222,6 +2222,7 @@ final class WordBookStore: ObservableObject {
         sectionOrder.append(section.id)
         rebuildSectionsMaintainingOrder()
         save()
+        syncToBackend(section: section)
     }
 
     func updateSection(_ section: WordSection) {
@@ -2229,6 +2230,7 @@ final class WordBookStore: ObservableObject {
         sections[index] = section
         rebuildSectionsMaintainingOrder()
         save()
+        syncToBackend(section: section)
     }
 
     func updateWords(for sectionID: UUID, words: [WordEntry]) {
@@ -2236,6 +2238,9 @@ final class WordBookStore: ObservableObject {
         sections[index] = sections[index].updatingWords(words)
         rebuildSectionsMaintainingOrder()
         save()
+        if let section = sections.first(where: { $0.id == sectionID }) {
+            syncToBackend(section: section)
+        }
     }
 
     func deleteSection(_ section: WordSection, deletedAt: Date = Date()) {
@@ -2435,6 +2440,44 @@ final class WordBookStore: ObservableObject {
         try? data.write(to: storageURL, options: .atomic)
     }
 
+    private func syncToBackend(section: WordSection) {
+        Task {
+            let entries = section.words.enumerated().map { index, word in
+                WordEntryPayload(
+                    id: word.id.uuidString,
+                    word: word.word,
+                    meaning: word.meaning,
+                    ordinal: index
+                )
+            }
+
+            do {
+                // Try update first
+                let _ = try await APIService.shared.updateWordbook(
+                    id: section.id.uuidString,
+                    title: section.title,
+                    subtitle: (section.subtitle?.isEmpty == false) ? section.subtitle : nil,
+                    targetPasses: section.targetPasses,
+                    entries: entries
+                )
+                print("📤 Synced wordbook to backend: \(section.title)")
+            } catch {
+                // If update fails, try create
+                do {
+                    let _ = try await APIService.shared.createWordbook(
+                        title: section.title,
+                        subtitle: (section.subtitle?.isEmpty == false) ? section.subtitle : nil,
+                        targetPasses: section.targetPasses,
+                        entries: entries
+                    )
+                    print("📤 Created wordbook on backend: \(section.title)")
+                } catch {
+                    print("❌ Failed to sync wordbook to backend: \(error)")
+                }
+            }
+        }
+    }
+
     private func rebuildSectionsMaintainingOrder() {
         var seen = Set<UUID>()
         var orderedSections: [WordSection] = []
@@ -2499,8 +2542,19 @@ struct ContentView: View {
                     isRootView = true
                 }
                 .task {
-                    // Load user profile from backend on app launch
+                    // Load user profile and sync all data from backend on app launch
                     await userProfile.loadFromBackend()
+
+                    // Sync wordbooks and progress from backend
+                    do {
+                        try await DataSyncService.shared.syncAllFromBackend(
+                            bookStore: bookStore,
+                            progressStore: progressStore
+                        )
+                    } catch {
+                        print("❌ Initial sync failed: \(error)")
+                        // Continue anyway - user can still use local data
+                    }
                 }
             .navigationDestination(for: UUID.self) { id in
                 if let section = bookStore.sections.first(where: { $0.id == id }) {
@@ -4451,7 +4505,7 @@ struct WordSection: Identifiable, Codable {
         case id, title, subtitle, words, targetPasses
     }
 
-    fileprivate init(id: UUID = UUID(), title: String, subtitle: String? = nil, words: [WordEntry], targetPasses: Int = 1) {
+    init(id: UUID = UUID(), title: String, subtitle: String? = nil, words: [WordEntry], targetPasses: Int = 1) {
         self.id = id
         self.title = title
         self.subtitle = subtitle
@@ -4494,13 +4548,17 @@ final class SectionProgressStore: ObservableObject {
     }
 
     @Published private var progressStates: [UUID: ProgressState] = [:] {
-        didSet { persist() }
+        didSet {
+            persist()
+            syncToBackend()
+        }
     }
 
     private let defaults: UserDefaults
     private let defaultsKey: String
     private static let legacyDefaultsKey = "SectionProgressStore.v1"
     private var isRestoring = false
+    private var syncTask: Task<Void, Never>?
 
     init(userId: String, userDefaults: UserDefaults = .standard) {
         self.defaults = userDefaults
@@ -4590,6 +4648,14 @@ final class SectionProgressStore: ObservableObject {
         }
     }
 
+    /// Set progress for a section (used during backend sync)
+    func setProgress(for sectionID: UUID, completedPages: Int, completedPasses: Int) {
+        var state = progress(for: sectionID)
+        state.completedPages = max(0, completedPages)
+        state.completedPasses = max(0, completedPasses)
+        progressStates[sectionID] = state
+    }
+
     private func persist() {
         guard !isRestoring,
               let data = try? JSONEncoder().encode(progressStates) else { return }
@@ -4633,6 +4699,34 @@ final class SectionProgressStore: ObservableObject {
         }
 
         return false
+    }
+
+    private func syncToBackend() {
+        guard !isRestoring else { return }
+
+        // Cancel previous sync
+        syncTask?.cancel()
+
+        // Debounce - wait 2 seconds before syncing
+        syncTask = Task {
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            guard !Task.isCancelled else { return }
+
+            let items = progressStates.map { sectionId, state in
+                SectionProgressItem(
+                    wordbookId: sectionId.uuidString,
+                    completedPages: state.completedPages,
+                    completedPasses: state.completedPasses
+                )
+            }
+
+            do {
+                let _ = try await APIService.shared.updateSectionProgress(items: items)
+                print("📤 Synced progress to backend (\(items.count) sections)")
+            } catch {
+                print("❌ Failed to sync progress to backend: \(error)")
+            }
+        }
     }
 }
 

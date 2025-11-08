@@ -47,6 +47,16 @@ final class AuthSessionStore: ObservableObject {
         persist(session: newSession)
     }
 
+    func refreshSession() async throws {
+        guard let currentSession = session else {
+            throw NSError(domain: "AuthSessionStore", code: -1, userInfo: [NSLocalizedDescriptionKey: "No session to refresh"])
+        }
+
+        let newSession = try await authService.refreshToken(refreshToken: currentSession.refreshToken)
+        session = newSession
+        persist(session: newSession)
+    }
+
     func signOut() {
         guard let currentSession = session else { return }
         Task {

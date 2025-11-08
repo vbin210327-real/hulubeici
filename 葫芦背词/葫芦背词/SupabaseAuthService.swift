@@ -232,6 +232,50 @@ struct SupabaseAuthService {
         return try parseSessionResponse(data: data)
     }
 
+    func refreshToken(refreshToken: String) async throws -> AuthSession {
+        var components = URLComponents(url: baseURL.appendingPathComponent("/auth/v1/token"), resolvingAgainstBaseURL: false)
+        components?.queryItems = [URLQueryItem(name: "grant_type", value: "refresh_token")]
+
+        guard let url = components?.url else {
+            throw AuthError.service("无法构建刷新请求。")
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(anonKey, forHTTPHeaderField: "apikey")
+        request.setValue(anonKey, forHTTPHeaderField: "Authorization")
+
+        let body = ["refresh_token": refreshToken]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
+
+        let (data, response) = try await urlSession.data(for: request)
+
+        if let httpResponse = response as? HTTPURLResponse,
+           !(200..<300).contains(httpResponse.statusCode) {
+            if httpResponse.statusCode == 400 || httpResponse.statusCode == 401 {
+                throw AuthError.invalidCredentials
+            }
+            let message = String(data: data, encoding: .utf8) ?? "未知错误"
+            throw AuthError.service(message)
+        }
+
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        guard let result = try? decoder.decode(SignInResponse.self, from: data) else {
+            throw AuthError.decoding
+        }
+
+        let expiry = Date().addingTimeInterval(result.expiresIn)
+        return AuthSession(
+            accessToken: result.accessToken,
+            refreshToken: result.refreshToken,
+            expiresAt: expiry,
+            userId: result.user.id,
+            email: result.user.email
+        )
+    }
+
     func signOut(accessToken: String) async throws {
         var request = URLRequest(url: baseURL.appendingPathComponent("/auth/v1/logout"))
         request.httpMethod = "POST"
