@@ -78,10 +78,10 @@ class APIService {
         var queryItems: [String] = []
 
         if let start = startDate {
-            queryItems.append("start_date=\(start)")
+            queryItems.append("startDate=\(start)")
         }
         if let end = endDate {
-            queryItems.append("end_date=\(end)")
+            queryItems.append("endDate=\(end)")
         }
 
         if !queryItems.isEmpty {
@@ -92,7 +92,7 @@ class APIService {
     }
 
     func updateDailyProgress(items: [DailyProgressItem]) async throws -> DailyProgressResponse {
-        let payload = DailyProgressPayload(progress: items)
+        let payload = DailyProgressPayload(records: items)
         return try await client.post(APIConfig.Endpoints.dailyProgress, body: payload)
     }
 
@@ -101,15 +101,15 @@ class APIService {
     func getVisibility(wordbookIds: [String]?) async throws -> VisibilityResponse {
         var endpoint = APIConfig.Endpoints.visibility
 
-        if let ids = wordbookIds, !ids.isEmpty {
-            endpoint += "?wordbook_ids=" + ids.joined(separator: ",")
+        if let ids = wordbookIds, let first = ids.first, !first.isEmpty {
+            endpoint += "?wordbookId=" + first
         }
 
         return try await client.get(endpoint)
     }
 
     func updateVisibility(items: [VisibilityItem]) async throws -> VisibilityResponse {
-        let payload = VisibilityPayload(visibility: items)
+        let payload = VisibilityPayload(records: items)
         return try await client.post(APIConfig.Endpoints.visibility, body: payload)
     }
 }
@@ -142,7 +142,7 @@ struct WordbookSummary: Codable {
     let title: String
     let subtitle: String?
     let targetPasses: Int
-    let wordCount: Int
+    let wordCount: Int?
     let isTemplate: Bool
     let createdAt: String
     let updatedAt: String
@@ -160,13 +160,13 @@ struct WordbookDetail: Codable {
     let isTemplate: Bool
     let createdAt: String
     let updatedAt: String
-    let entries: [WordEntryData]
+    let words: [WordEntryData]
 }
 
 struct WordEntryData: Codable {
     let id: String
-    let lemma: String
-    let definition: String
+    let word: String
+    let meaning: String
     let ordinal: Int
 }
 
@@ -218,17 +218,17 @@ struct SectionProgressItem: Codable {
 }
 
 struct DailyProgressResponse: Codable {
-    let progress: [DailyProgressData]
+    let records: [DailyProgressData]
 }
 
 struct DailyProgressData: Codable {
-    let progressDate: String
+    let date: String
     let wordsLearned: Int
     let updatedAt: String
 }
 
 struct DailyProgressPayload: Codable {
-    let progress: [DailyProgressItem]
+    let records: [DailyProgressItem]
 }
 
 struct DailyProgressItem: Codable {
@@ -238,7 +238,7 @@ struct DailyProgressItem: Codable {
 
 // Visibility
 struct VisibilityResponse: Codable {
-    let visibility: [VisibilityData]
+    let records: [VisibilityData]
 }
 
 struct VisibilityData: Codable {
@@ -249,7 +249,7 @@ struct VisibilityData: Codable {
 }
 
 struct VisibilityPayload: Codable {
-    let visibility: [VisibilityItem]
+    let records: [VisibilityItem]
 }
 
 struct VisibilityItem: Codable {

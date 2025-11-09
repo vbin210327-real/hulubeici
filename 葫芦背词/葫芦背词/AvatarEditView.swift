@@ -145,28 +145,33 @@ struct AvatarCropperView: View {
 
                     // Image
                     GeometryReader { geometry in
+                        let imageSize = calculateImageSize(in: geometry.size)
+                        let minScale = cropSize / min(imageSize.width, imageSize.height)
+
                         Image(uiImage: image)
                             .resizable()
                             .scaledToFit()
-                            .scaleEffect(scale)
-                            .offset(offset)
+                            .scaleEffect(max(scale, minScale))
+                            .offset(limitedOffset(imageSize: imageSize, currentScale: max(scale, minScale)))
                             .frame(width: geometry.size.width, height: geometry.size.height)
                             .gesture(
                                 MagnificationGesture()
                                     .onChanged { value in
-                                        scale = lastScale * value
+                                        let newScale = lastScale * value
+                                        scale = max(newScale, minScale)
                                     }
                                     .onEnded { _ in
-                                        lastScale = scale
+                                        lastScale = max(scale, minScale)
                                     }
                             )
                             .gesture(
                                 DragGesture()
                                     .onChanged { value in
-                                        offset = CGSize(
+                                        let newOffset = CGSize(
                                             width: lastOffset.width + value.translation.width,
                                             height: lastOffset.height + value.translation.height
                                         )
+                                        offset = newOffset
                                     }
                                     .onEnded { _ in
                                         lastOffset = offset
@@ -212,27 +217,86 @@ struct AvatarCropperView: View {
         }
     }
 
+    private func calculateImageSize(in containerSize: CGSize) -> CGSize {
+        let imageAspect = image.size.width / image.size.height
+        let containerAspect = containerSize.width / containerSize.height
+
+        if imageAspect > containerAspect {
+            // Image is wider - fit to height
+            let width = containerSize.height * imageAspect
+            return CGSize(width: width, height: containerSize.height)
+        } else {
+            // Image is taller - fit to width
+            let height = containerSize.width / imageAspect
+            return CGSize(width: containerSize.width, height: height)
+        }
+    }
+
+    private func limitedOffset(imageSize: CGSize, currentScale: CGFloat) -> CGSize {
+        let scaledWidth = imageSize.width * currentScale
+        let scaledHeight = imageSize.height * currentScale
+
+        let maxOffsetX = max(0, (scaledWidth - cropSize) / 2)
+        let maxOffsetY = max(0, (scaledHeight - cropSize) / 2)
+
+        let constrainedX = min(max(offset.width, -maxOffsetX), maxOffsetX)
+        let constrainedY = min(max(offset.height, -maxOffsetY), maxOffsetY)
+
+        return CGSize(width: constrainedX, height: constrainedY)
+    }
+
     private func cropAndSave() {
-        // Create a renderer for the cropped image
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: cropSize * 3, height: cropSize * 3))
+        // Calculate the actual display size of the image
+        let imageSize = calculateImageSize(in: CGSize(width: cropSize, height: cropSize))
+        let minScale = cropSize / min(imageSize.width, imageSize.height)
+        let actualScale = max(scale, minScale)
 
-        let croppedImage = renderer.image { context in
-            let drawRect = CGRect(
-                x: -offset.width * 3,
-                y: -offset.height * 3,
-                width: image.size.width * scale * 3,
-                height: image.size.height * scale * 3
-            )
+        // Calculate the scaled display size
+        let displayWidth = imageSize.width * actualScale
+        let displayHeight = imageSize.height * actualScale
 
+        // Get the constrained offset
+        let actualOffset = limitedOffset(imageSize: imageSize, currentScale: actualScale)
+
+        // Calculate the crop region in the original image coordinates
+        let scaleToOriginal = image.size.width / imageSize.width
+        let cropRegionInDisplay = CGRect(
+            x: (displayWidth - cropSize) / 2 - actualOffset.width,
+            y: (displayHeight - cropSize) / 2 - actualOffset.height,
+            width: cropSize,
+            height: cropSize
+        )
+
+        // Convert to original image coordinates
+        let cropRegion = CGRect(
+            x: cropRegionInDisplay.origin.x * scaleToOriginal,
+            y: cropRegionInDisplay.origin.y * scaleToOriginal,
+            width: cropRegionInDisplay.width * scaleToOriginal,
+            height: cropRegionInDisplay.height * scaleToOriginal
+        )
+
+        // Crop the image
+        guard let cgImage = image.cgImage?.cropping(to: cropRegion) else {
+            return
+        }
+
+        let croppedUIImage = UIImage(cgImage: cgImage, scale: image.scale, orientation: image.imageOrientation)
+
+        // Create a circular masked version at 3x resolution
+        let outputSize = CGSize(width: cropSize * 3, height: cropSize * 3)
+        let renderer = UIGraphicsImageRenderer(size: outputSize)
+
+        let finalImage = renderer.image { context in
             // Clip to circle
-            let path = UIBezierPath(ovalIn: CGRect(x: 0, y: 0, width: cropSize * 3, height: cropSize * 3))
+            let path = UIBezierPath(ovalIn: CGRect(origin: .zero, size: outputSize))
             path.addClip()
 
-            image.draw(in: drawRect)
+            // Draw the cropped image
+            croppedUIImage.draw(in: CGRect(origin: .zero, size: outputSize))
         }
 
         // Convert to JPEG data with compression
-        if let data = croppedImage.jpegData(compressionQuality: 0.8) {
+        if let data = finalImage.jpegData(compressionQuality: 0.8) {
             Haptic.trigger(.medium)
             onCrop(data)
         }

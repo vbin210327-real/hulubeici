@@ -2189,6 +2189,7 @@ final class WordBookStore: ObservableObject {
     private var sectionOrder: [UUID] = []
 
     private let storageURL: URL
+    weak var syncStatusStore: SyncStatusStore?
 
     private struct PersistedState: Codable {
         var sections: [WordSection]
@@ -2441,7 +2442,9 @@ final class WordBookStore: ObservableObject {
     }
 
     private func syncToBackend(section: WordSection) {
-        Task {
+        Task { @MainActor in
+            syncStatusStore?.markWordbookSyncStarted()
+
             let entries = section.words.enumerated().map { index, word in
                 WordEntryPayload(
                     id: word.id.uuidString,
@@ -2461,6 +2464,7 @@ final class WordBookStore: ObservableObject {
                     entries: entries
                 )
                 print("📤 Synced wordbook to backend: \(section.title)")
+                syncStatusStore?.markWordbookSyncSuccess()
             } catch {
                 // If update fails, try create
                 do {
@@ -2471,8 +2475,10 @@ final class WordBookStore: ObservableObject {
                         entries: entries
                     )
                     print("📤 Created wordbook on backend: \(section.title)")
-                } catch {
-                    print("❌ Failed to sync wordbook to backend: \(error)")
+                    syncStatusStore?.markWordbookSyncSuccess()
+                } catch let syncError {
+                    print("❌ Failed to sync wordbook to backend: \(syncError)")
+                    syncStatusStore?.markWordbookSyncFailed(syncError, wordbookId: section.id)
                 }
             }
         }
@@ -2517,6 +2523,7 @@ struct ContentView: View {
     @StateObject private var progressStore: SectionProgressStore
     @StateObject private var dailyProgressStore: DailyProgressStore
     @StateObject private var userProfile: UserProfileStore
+    @StateObject private var syncStatus = SyncStatusStore()
     @State private var showingAutomationAgent = false
     @State private var importingSection: WordSection?
     @State private var selectedTab: MainTab = .home
@@ -2525,11 +2532,20 @@ struct ContentView: View {
 
     init(session: AuthSession) {
         let userId = session.userId
-        _bookStore = StateObject(wrappedValue: WordBookStore(userId: userId))
+        let bookStore = WordBookStore(userId: userId)
+        let progressStore = SectionProgressStore(userId: userId)
+        let syncStatus = SyncStatusStore()
+
+        // Wire up sync status
+        bookStore.syncStatusStore = syncStatus
+        progressStore.syncStatusStore = syncStatus
+
+        _bookStore = StateObject(wrappedValue: bookStore)
         _hideState = StateObject(wrappedValue: WordVisibilityStore(userId: userId))
-        _progressStore = StateObject(wrappedValue: SectionProgressStore(userId: userId))
+        _progressStore = StateObject(wrappedValue: progressStore)
         _dailyProgressStore = StateObject(wrappedValue: DailyProgressStore(userId: userId))
         _userProfile = StateObject(wrappedValue: UserProfileStore(userId: userId))
+        _syncStatus = StateObject(wrappedValue: syncStatus)
     }
 
     var body: some View {
@@ -2546,15 +2562,22 @@ struct ContentView: View {
                     await userProfile.loadFromBackend()
 
                     // Sync wordbooks and progress from backend
+                    syncStatus.markWordbookSyncStarted()
                     do {
                         try await DataSyncService.shared.syncAllFromBackend(
                             bookStore: bookStore,
                             progressStore: progressStore
                         )
+                        syncStatus.markWordbookSyncSuccess()
                     } catch {
                         print("❌ Initial sync failed: \(error)")
+                        syncStatus.markWordbookSyncFailed(error)
                         // Continue anyway - user can still use local data
                     }
+
+                    // Load remaining cloud state
+                    await dailyProgressStore.loadFromBackend()
+                    await hideState.loadFromBackend(bookStore: bookStore)
                 }
             .navigationDestination(for: UUID.self) { id in
                 if let section = bookStore.sections.first(where: { $0.id == id }) {
@@ -2722,13 +2745,42 @@ struct ContentView: View {
     }
 
     private var headerView: some View {
-        HStack(spacing: 14) {
-            AppIconBadge()
+        VStack(spacing: 12) {
+            HStack(spacing: 14) {
+                AppIconBadge()
 
-            Text("葫芦背词")
-                .font(.title2.weight(.semibold))
+                Text("葫芦背词")
+                    .font(.title2.weight(.semibold))
 
-            Spacer()
+                Spacer()
+
+                // Sync status indicators
+                HStack(spacing: 8) {
+                    SyncStatusBanner(state: syncStatus.wordbookSyncState)
+                    SyncStatusBanner(state: syncStatus.progressSyncState)
+                }
+            }
+
+            // Sync error banner
+            if syncStatus.showSyncError {
+                HStack {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.orange)
+                    Text(syncStatus.syncErrorMessage)
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                    Spacer()
+                    Button("关闭") {
+                        syncStatus.dismissError()
+                    }
+                    .font(.caption.weight(.medium))
+                    .foregroundColor(.orange)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.orange.opacity(0.1))
+                .cornerRadius(12)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -4559,6 +4611,7 @@ final class SectionProgressStore: ObservableObject {
     private static let legacyDefaultsKey = "SectionProgressStore.v1"
     private var isRestoring = false
     private var syncTask: Task<Void, Never>?
+    weak var syncStatusStore: SyncStatusStore?
 
     init(userId: String, userDefaults: UserDefaults = .standard) {
         self.defaults = userDefaults
@@ -4708,9 +4761,11 @@ final class SectionProgressStore: ObservableObject {
         syncTask?.cancel()
 
         // Debounce - wait 2 seconds before syncing
-        syncTask = Task {
+        syncTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 2_000_000_000)
             guard !Task.isCancelled else { return }
+
+            syncStatusStore?.markProgressSyncStarted()
 
             let items = progressStates.map { sectionId, state in
                 SectionProgressItem(
@@ -4723,8 +4778,10 @@ final class SectionProgressStore: ObservableObject {
             do {
                 let _ = try await APIService.shared.updateSectionProgress(items: items)
                 print("📤 Synced progress to backend (\(items.count) sections)")
+                syncStatusStore?.markProgressSyncSuccess()
             } catch {
                 print("❌ Failed to sync progress to backend: \(error)")
+                syncStatusStore?.markProgressSyncFailed(error)
             }
         }
     }
@@ -4737,13 +4794,17 @@ final class DailyProgressStore: ObservableObject {
     }
 
     @Published private var records: [String: Int] = [:] {
-        didSet { persist() }
+        didSet {
+            persist()
+            syncToBackend()
+        }
     }
 
     private let defaults: UserDefaults
     private let defaultsKey: String
     private static let legacyDefaultsKey = "DailyProgressStore.v1"
     private var isRestoring = false
+    private var syncTask: Task<Void, Never>?
 
     init(userId: String, userDefaults: UserDefaults = .standard) {
         self.defaults = userDefaults
@@ -4817,6 +4878,50 @@ final class DailyProgressStore: ObservableObject {
         }
 
         return false
+    }
+}
+
+extension DailyProgressStore {
+    // MARK: - Cloud Sync
+    func loadFromBackend(startDate: String? = nil, endDate: String? = nil) async {
+        do {
+            let response = try await APIService.shared.getDailyProgress(startDate: startDate, endDate: endDate)
+            var tmp: [String: Int] = [:]
+            for rec in response.records {
+                tmp[rec.date] = rec.wordsLearned
+            }
+            let snapshot = tmp
+            await MainActor.run {
+                self.isRestoring = true
+                self.records = snapshot
+                self.isRestoring = false
+            }
+            print("✅ Daily progress loaded from backend (\(snapshot.count) days)")
+        } catch {
+            print("❌ Failed to load daily progress: \(error)")
+        }
+    }
+
+    private func syncToBackend() {
+        guard !isRestoring else { return }
+
+        // Debounce to avoid excessive calls
+        syncTask?.cancel()
+        syncTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            guard !Task.isCancelled else { return }
+
+            let items = records.map { (date, words) in
+                DailyProgressItem(progressDate: date, wordsLearned: words)
+            }
+
+            do {
+                let _ = try await APIService.shared.updateDailyProgress(items: items)
+                print("📤 Synced daily progress to backend (\(items.count) days)")
+            } catch {
+                print("❌ Failed to sync daily progress: \(error)")
+            }
+        }
     }
 }
 
@@ -4973,13 +5078,17 @@ final class WordVisibilityStore: ObservableObject {
     }
 
     @Published private var snapshot = Snapshot() {
-        didSet { persist() }
+        didSet {
+            persist()
+            syncToBackend()
+        }
     }
 
     private let defaults: UserDefaults
     private let defaultsKey: String
     private static let legacyDefaultsKey = "WordVisibilityStore.v1"
     private var isRestoring = false
+    private var syncTask: Task<Void, Never>?
 
     init(userId: String, userDefaults: UserDefaults = .standard) {
         self.defaults = userDefaults
@@ -5146,6 +5255,96 @@ final class WordVisibilityStore: ObservableObject {
     private struct SnapshotV2Indices: Codable {
         var hiddenWordIndices: [UUID: Set<Int>] = [:]
         var hiddenMeaningIndices: [UUID: Set<Int>] = [:]
+    }
+}
+
+extension WordVisibilityStore {
+    // MARK: - Cloud Sync
+    func loadFromBackend(bookStore: WordBookStore) async {
+        do {
+            let response = try await APIService.shared.getVisibility(wordbookIds: nil)
+
+            // Build index: entryID -> sectionID
+            var entryToSection: [UUID: UUID] = [:]
+            for section in bookStore.sections {
+                for entry in section.words {
+                    entryToSection[entry.id] = section.id
+                }
+            }
+
+            var newHiddenWord: [UUID: Set<UUID>] = [:]
+            var newHiddenMeaning: [UUID: Set<UUID>] = [:]
+
+            for rec in response.records {
+                guard let entryId = UUID(uuidString: rec.wordEntryId),
+                      let sectionId = entryToSection[entryId] else { continue }
+
+                if !rec.showWord {
+                    var set = newHiddenWord[sectionId] ?? []
+                    set.insert(entryId)
+                    newHiddenWord[sectionId] = set
+                }
+                if !rec.showMeaning {
+                    var set = newHiddenMeaning[sectionId] ?? []
+                    set.insert(entryId)
+                    newHiddenMeaning[sectionId] = set
+                }
+            }
+
+            let hiddenWordSnapshot = newHiddenWord
+            let hiddenMeaningSnapshot = newHiddenMeaning
+            await MainActor.run {
+                self.isRestoring = true
+                self.snapshot = Snapshot(hiddenWordIDs: hiddenWordSnapshot, hiddenMeaningIDs: hiddenMeaningSnapshot)
+                self.isRestoring = false
+            }
+            print("✅ Visibility loaded from backend")
+        } catch {
+            print("❌ Failed to load visibility: \(error)")
+        }
+    }
+
+    private func syncToBackend() {
+        guard !isRestoring else { return }
+
+        // Debounce
+        syncTask?.cancel()
+        syncTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            guard !Task.isCancelled else { return }
+
+            // Merge hidden sets into records of overrides
+            var merged: [UUID: (showWord: Bool, showMeaning: Bool)] = [:]
+            for (sectionId, set) in snapshot.hiddenWordIDs {
+                _ = sectionId // unused but kept to emphasize per-section origin
+                for entryId in set {
+                    var state = merged[entryId] ?? (true, true)
+                    state.showWord = false
+                    merged[entryId] = state
+                }
+            }
+            for (sectionId, set) in snapshot.hiddenMeaningIDs {
+                _ = sectionId
+                for entryId in set {
+                    var state = merged[entryId] ?? (true, true)
+                    state.showMeaning = false
+                    merged[entryId] = state
+                }
+            }
+
+            let items: [VisibilityItem] = merged.map { (entryId, state) in
+                VisibilityItem(wordEntryId: entryId.uuidString, showWord: state.showWord, showMeaning: state.showMeaning)
+            }
+
+            guard !items.isEmpty else { return }
+
+            do {
+                let _ = try await APIService.shared.updateVisibility(items: items)
+                print("📤 Synced visibility to backend (\(items.count) entries)")
+            } catch {
+                print("❌ Failed to sync visibility: \(error)")
+            }
+        }
     }
 }
 private extension Array {

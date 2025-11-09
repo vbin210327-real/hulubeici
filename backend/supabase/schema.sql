@@ -23,6 +23,7 @@ create table if not exists public.wordbooks (
   updated_at timestamptz not null default now()
 );
 
+drop trigger if exists set_wordbooks_updated_at on public.wordbooks;
 create trigger set_wordbooks_updated_at
 before update on public.wordbooks
 for each row execute function public.set_updated_at();
@@ -39,6 +40,7 @@ create table if not exists public.word_entries (
   constraint non_empty_definition check (length(trim(definition)) > 0)
 );
 
+drop trigger if exists set_word_entries_updated_at on public.word_entries;
 create trigger set_word_entries_updated_at
 before update on public.word_entries
 for each row execute function public.set_updated_at();
@@ -59,6 +61,7 @@ create table if not exists public.section_progress (
   primary key (user_id, wordbook_id)
 );
 
+drop trigger if exists set_section_progress_updated_at on public.section_progress;
 create trigger set_section_progress_updated_at
 before update on public.section_progress
 for each row execute function public.set_updated_at();
@@ -72,6 +75,7 @@ create table if not exists public.daily_progress (
   primary key (user_id, progress_date)
 );
 
+drop trigger if exists set_daily_progress_updated_at on public.daily_progress;
 create trigger set_daily_progress_updated_at
 before update on public.daily_progress
 for each row execute function public.set_updated_at();
@@ -86,6 +90,7 @@ create table if not exists public.word_visibility (
   primary key (user_id, word_entry_id)
 );
 
+drop trigger if exists set_word_visibility_updated_at on public.word_visibility;
 create trigger set_word_visibility_updated_at
 before update on public.word_visibility
 for each row execute function public.set_updated_at();
@@ -99,6 +104,7 @@ create table if not exists public.user_profiles (
   updated_at timestamptz not null default now()
 );
 
+drop trigger if exists set_user_profiles_updated_at on public.user_profiles;
 create trigger set_user_profiles_updated_at
 before update on public.user_profiles
 for each row execute function public.set_updated_at();
@@ -111,17 +117,20 @@ alter table public.daily_progress enable row level security;
 alter table public.word_visibility enable row level security;
 alter table public.user_profiles enable row level security;
 
+drop policy if exists "Users can read their wordbooks or templates" on public.wordbooks;
 create policy "Users can read their wordbooks or templates"
 on public.wordbooks
 for select
 using (owner_id = auth.uid() or is_template);
 
+drop policy if exists "Users can manage their own wordbooks" on public.wordbooks;
 create policy "Users can manage their own wordbooks"
 on public.wordbooks
 for all
 using (owner_id = auth.uid())
 with check (owner_id = auth.uid());
 
+drop policy if exists "Entries are visible to owners or template access" on public.word_entries;
 create policy "Entries are visible to owners or template access"
 on public.word_entries
 for select
@@ -133,6 +142,7 @@ using (
   )
 );
 
+drop policy if exists "Entries can be managed by owners" on public.word_entries;
 create policy "Entries can be managed by owners"
 on public.word_entries
 for all
@@ -151,24 +161,28 @@ with check (
   )
 );
 
+drop policy if exists "Users manage their section progress" on public.section_progress;
 create policy "Users manage their section progress"
 on public.section_progress
 for all
 using (user_id = auth.uid())
 with check (user_id = auth.uid());
 
+drop policy if exists "Users manage their daily progress" on public.daily_progress;
 create policy "Users manage their daily progress"
 on public.daily_progress
 for all
 using (user_id = auth.uid())
 with check (user_id = auth.uid());
 
+drop policy if exists "Users manage their visibility settings" on public.word_visibility;
 create policy "Users manage their visibility settings"
 on public.word_visibility
 for all
 using (user_id = auth.uid())
 with check (user_id = auth.uid());
 
+drop policy if exists "Users manage their profile" on public.user_profiles;
 create policy "Users manage their profile"
 on public.user_profiles
 for all

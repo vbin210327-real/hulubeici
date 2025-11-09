@@ -67,11 +67,11 @@ class DataSyncService {
             let detail = detailResponse.wordbook
 
             // Convert API model to local model
-            let wordEntries = detail.entries.map { entry in
+            let wordEntries = detail.words.map { entry in
                 WordEntry(
                     id: UUID(uuidString: entry.id) ?? UUID(),
-                    word: entry.lemma,
-                    meaning: entry.definition
+                    word: entry.word,
+                    meaning: entry.meaning
                 )
             }
 
@@ -199,4 +199,3 @@ class DataSyncService {
         }
     }
 }
-
