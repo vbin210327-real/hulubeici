@@ -4,6 +4,15 @@ enum APIConfig {
     // Backend API base URL (production)
     static let baseURL = "https://hulu-beici-backend.vercel.app"
 
+    // App sync mode switches
+    struct AppSyncConfig {
+        // Set to false to disable legacy HTTP backend syncing
+        static let backendEnabled: Bool = false
+        // Enable CloudKit iCloud sync
+        static let iCloudEnabled: Bool = true
+        static let iCloudContainerID: String = "iCloud.com.hulubeici"
+    }
+
     // API endpoints
     enum Endpoints {
         static let profile = "/api/profile"

@@ -5,7 +5,7 @@ final class AuthSessionStore: ObservableObject {
     @Published private(set) var session: AuthSession?
     @Published private(set) var lastError: String?
 
-    private let authService = SupabaseAuthService()
+    // Backend auth removed in iCloud mode
     private let storageKey = "SupabaseAuthSession.v1"
     private let defaults: UserDefaults
 
@@ -22,53 +22,15 @@ final class AuthSessionStore: ObservableObject {
         }
     }
 
-    func signIn(email: String, password: String) async throws {
-        lastError = nil
-        let sanitizedEmail = try EmailValidator.validate(email)
-        let sanitizedPassword = password.trimmingCharacters(in: .whitespacesAndNewlines)
-        let newSession = try await authService.signIn(email: sanitizedEmail, password: sanitizedPassword)
-        session = newSession
-        persist(session: newSession)
-    }
+    func signIn(email: String, password: String) async throws { throw NSError(domain: "Auth", code: -1, userInfo: [NSLocalizedDescriptionKey: "Email sign-in disabled. Using iCloud sync."]) }
 
-    func requestEmailOTP(email: String) async throws {
-        lastError = nil
-        let sanitizedEmail = try EmailValidator.validate(email)
-        try EmailDeliveryGuard.validateDeliveryAllowed()
-        try await authService.sendEmailOTP(email: sanitizedEmail)
-    }
+    func requestEmailOTP(email: String) async throws { throw NSError(domain: "Auth", code: -1, userInfo: [NSLocalizedDescriptionKey: "OTP disabled. Using iCloud sync."]) }
 
-    func signInWithEmailOTP(email: String, code: String) async throws {
-        lastError = nil
-        let sanitizedEmail = try EmailValidator.validate(email)
-        let sanitizedCode = code.trimmingCharacters(in: .whitespacesAndNewlines)
-        let newSession = try await authService.signInWithEmailOTP(email: sanitizedEmail, code: sanitizedCode)
-        session = newSession
-        persist(session: newSession)
-    }
+    func signInWithEmailOTP(email: String, code: String) async throws { throw NSError(domain: "Auth", code: -1, userInfo: [NSLocalizedDescriptionKey: "OTP disabled. Using iCloud sync."]) }
 
-    func refreshSession() async throws {
-        guard let currentSession = session else {
-            throw NSError(domain: "AuthSessionStore", code: -1, userInfo: [NSLocalizedDescriptionKey: "No session to refresh"])
-        }
+    func refreshSession() async throws { }
 
-        let newSession = try await authService.refreshToken(refreshToken: currentSession.refreshToken)
-        session = newSession
-        persist(session: newSession)
-    }
-
-    func signOut() {
-        guard let currentSession = session else { return }
-        Task {
-            do {
-                try await authService.signOut(accessToken: currentSession.accessToken)
-            } catch {
-                // Swallow network errors on logout; session will still be cleared locally.
-            }
-        }
-        session = nil
-        persist(session: nil)
-    }
+    func signOut() { session = nil; persist(session: nil) }
 
     func clearErrors() {
         lastError = nil
