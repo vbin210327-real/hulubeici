@@ -254,6 +254,7 @@ struct AIChatView: View {
             Text(text)
                 .font(.system(size: 16))
                 .foregroundColor(.white)
+                .textSelection(.enabled)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
                 .background(
@@ -283,6 +284,7 @@ struct AIChatView: View {
                 Text(cleaned)
                     .font(.system(size: 16))
                     .foregroundColor(Color(.label))
+                    .textSelection(.enabled)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
                     .background(

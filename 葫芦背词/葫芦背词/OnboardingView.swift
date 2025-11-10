@@ -2,6 +2,8 @@ import SwiftUI
 import UIKit
 
 struct OnboardingView: View {
+    @EnvironmentObject private var purchaseStore: PurchaseStore
+    @State private var showingPaywall: Bool = false
     enum Step: Int, CaseIterable {
         case welcome
         case currentVocabulary
@@ -180,6 +182,14 @@ struct OnboardingView: View {
             }
         }
         .statusBarHidden(true)
+        .sheet(isPresented: $showingPaywall, onDismiss: {
+            // When paywall is dismissed, check if user is premium and navigate
+            if purchaseStore.isPremium {
+                onContinue()
+            }
+        }) {
+            PaywallView().environmentObject(purchaseStore)
+        }
     }
 
     private var backgroundLayer: some View {
@@ -670,7 +680,12 @@ struct OnboardingView: View {
                 currentStepIndex += 1
             }
         } else {
-            onContinue()
+            // Final step: show paywall if not premium
+            if purchaseStore.isPremium {
+                onContinue()
+            } else {
+                showingPaywall = true
+            }
         }
     }
 

@@ -6,6 +6,11 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		ABD019F32EC084C9002CD646 /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = ABD019F22EC084C9002CD646 /* StoreKit.framework */; };
+		ABF8843F2EC19CD700B03428 /* StoreKit.storekit in Resources */ = {isa = PBXBuildFile; fileRef = ABF8843E2EC19CD700B03428 /* StoreKit.storekit */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		AB8BDE492E9E4D8E00F220D2 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -27,6 +32,9 @@
 		AB8BDE3B2E9E4D8C00F220D2 /* 葫芦背词.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "葫芦背词.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		AB8BDE482E9E4D8E00F220D2 /* 葫芦背词Tests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "葫芦背词Tests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		AB8BDE522E9E4D8E00F220D2 /* 葫芦背词UITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "葫芦背词UITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		AB952E412EC19699004318A5 /* StoreKitTest.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKitTest.framework; path = Platforms/iPhoneOS.platform/Developer/Library/Frameworks/StoreKitTest.framework; sourceTree = DEVELOPER_DIR; };
+		ABD019F22EC084C9002CD646 /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
+		ABF8843E2EC19CD700B03428 /* StoreKit.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = StoreKit.storekit; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -52,6 +60,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				ABD019F32EC084C9002CD646 /* StoreKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -75,9 +84,12 @@
 		AB8BDE322E9E4D8C00F220D2 = {
 			isa = PBXGroup;
 			children = (
+				ABF8843E2EC19CD700B03428 /* StoreKit.storekit */,
+				ABF884402EC19CEF00B03428 /* New Group */,
 				AB8BDE3D2E9E4D8C00F220D2 /* 葫芦背词 */,
 				AB8BDE4B2E9E4D8E00F220D2 /* 葫芦背词Tests */,
 				AB8BDE552E9E4D8E00F220D2 /* 葫芦背词UITests */,
+				ABD019F12EC084C9002CD646 /* Frameworks */,
 				AB8BDE3C2E9E4D8C00F220D2 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -90,6 +102,22 @@
 				AB8BDE522E9E4D8E00F220D2 /* 葫芦背词UITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		ABD019F12EC084C9002CD646 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				AB952E412EC19699004318A5 /* StoreKitTest.framework */,
+				ABD019F22EC084C9002CD646 /* StoreKit.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		ABF884402EC19CEF00B03428 /* New Group */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = "New Group";
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -212,6 +240,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				ABF8843F2EC19CD700B03428 /* StoreKit.storekit in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -409,7 +438,7 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -444,7 +473,7 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
