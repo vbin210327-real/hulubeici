@@ -33,7 +33,6 @@
 		AB8BDE522E9E4D8E00F220D2 /* 葫芦背词UITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "葫芦背词UITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		AB952E412EC19699004318A5 /* StoreKitTest.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKitTest.framework; path = Platforms/iPhoneOS.platform/Developer/Library/Frameworks/StoreKitTest.framework; sourceTree = DEVELOPER_DIR; };
 		ABD019F22EC084C9002CD646 /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
-		ABF8843E2EC19CD700B03428 /* StoreKit.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = StoreKit.storekit; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -83,7 +82,6 @@
 		AB8BDE322E9E4D8C00F220D2 = {
 			isa = PBXGroup;
 			children = (
-				ABF8843E2EC19CD700B03428 /* StoreKit.storekit */,
 				ABF884402EC19CEF00B03428 /* New Group */,
 				AB8BDE3D2E9E4D8C00F220D2 /* 葫芦背词 */,
 				AB8BDE4B2E9E4D8E00F220D2 /* 葫芦背词Tests */,
