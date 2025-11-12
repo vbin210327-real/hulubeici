@@ -40,6 +40,10 @@ struct PaywallView: View {
                     .padding(.horizontal, 8)
             }
 
+            restorePurchasesButton
+
+            legalLinks
+
             Button(action: { dismiss() }) {
                 Text("稍后再说")
                     .font(.footnote)
@@ -210,6 +214,37 @@ struct PaywallView: View {
         if product.id == AppEntitlements.ProductID.premiumMonthly { return "¥9/月 · 可随时取消订阅" }
         if product.id == AppEntitlements.ProductID.premiumYearly { return "仅¥5.8/月 · 可随时取消订阅" }
         return ""
+    }
+
+    private var restorePurchasesButton: some View {
+        Button(action: {
+            Task {
+                await purchaseStore.restore()
+            }
+        }) {
+            Text("恢复购买")
+                .font(.footnote)
+                .foregroundStyle(.blue)
+        }
+        .disabled(purchaseStore.purchaseInProgress)
+        .padding(.top, 4)
+    }
+
+    private var legalLinks: some View {
+        HStack(spacing: 16) {
+            Link("隐私政策", destination: URL(string: "https://vbin210327-real.github.io/hulubeici-legal/PrivacyPolicy")!)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Text("·")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Link("使用条款", destination: URL(string: "https://vbin210327-real.github.io/hulubeici-legal/TermsOfService")!)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.top, 4)
     }
 }
 
