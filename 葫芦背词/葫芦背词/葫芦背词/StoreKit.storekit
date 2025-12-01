@@ -28,7 +28,7 @@
     "_storeKitErrors" : [
 
     ],
-    "_timeRate" : 3600
+    "_timeRate" : 0
   },
   "subscriptionGroups" : [
     {
@@ -73,15 +73,15 @@
           "codeOffers" : [
 
           ],
-          "displayPrice" : "50",
+          "displayPrice" : "70",
           "familyShareable" : false,
           "groupNumber" : 1,
           "internalID" : "6AFFE17B",
           "introductoryOffer" : {
             "internalID" : "INTRO_YEARLY_7DAY",
+            "numberOfPeriods" : 1,
             "paymentMode" : "free",
-            "subscriptionPeriod" : "P7D",
-            "numberOfPeriods" : 1
+            "subscriptionPeriod" : "P7D"
           },
           "localizations" : [
             {

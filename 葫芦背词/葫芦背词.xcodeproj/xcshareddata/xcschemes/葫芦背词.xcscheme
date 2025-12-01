@@ -80,6 +80,9 @@
          identifier = "com.apple.dt.IDEFoundation.CurrentLocationScenarioIdentifier"
          referenceType = "1">
       </LocationScenarioReference>
+      <StoreKitConfigurationFileReference
+         identifier = "../../&#x846b;&#x82a6;&#x80cc;&#x8bcd;/&#x846b;&#x82a6;&#x80cc;&#x8bcd;/StoreKit.storekit">
+      </StoreKitConfigurationFileReference>
    </LaunchAction>
    <ProfileAction
       buildConfiguration = "Release"

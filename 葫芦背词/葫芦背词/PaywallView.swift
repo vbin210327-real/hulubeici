@@ -9,6 +9,8 @@ struct PaywallView: View {
 
     var body: some View {
         VStack(spacing: 20) {
+            Spacer()
+            
             VStack(spacing: 8) {
                 Text("解锁高效背词")
                     .font(.system(size: 26, weight: .bold))
@@ -16,7 +18,6 @@ struct PaywallView: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
-            .padding(.top, 12)
 
             features
 
@@ -42,13 +43,10 @@ struct PaywallView: View {
 
             restorePurchasesButton
 
+            Spacer()
+            
             legalLinks
-
-            Button(action: { dismiss() }) {
-                Text("稍后再说")
-                    .font(.footnote)
-            }
-            .padding(.bottom, 10)
+                .padding(.bottom, 10)
         }
         .padding(20)
         .task { await purchaseStore.loadProducts() }
@@ -111,20 +109,28 @@ struct PaywallView: View {
             selectedProductID = product.id
         } label: {
             HStack {
-                VStack(alignment: .leading) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text(title(for: product)).font(.headline)
-                    if let offer = product.subscription?.introductoryOffer {
-                        Text(introText(from: offer))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
                     Text(priceNote(for: product))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Text(product.displayPrice)
-                    .font(.headline)
+                // 年度订阅显示划线价格对比
+                if product.id == AppEntitlements.ProductID.premiumYearly {
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text("¥108")
+                            .font(.subheadline)
+                            .strikethrough()
+                            .foregroundStyle(.secondary)
+                        Text("¥50")
+                            .font(.title3)
+                            .fontWeight(.bold)
+                    }
+                } else {
+                    Text(product.displayPrice)
+                        .font(.headline)
+                }
             }
             .padding()
             .background(
@@ -212,7 +218,7 @@ struct PaywallView: View {
 
     private func priceNote(for product: Product) -> String {
         if product.id == AppEntitlements.ProductID.premiumMonthly { return "¥9/月 · 可随时取消订阅" }
-        if product.id == AppEntitlements.ProductID.premiumYearly { return "仅¥5.8/月 · 可随时取消订阅" }
+        if product.id == AppEntitlements.ProductID.premiumYearly { return "仅¥4.1/月 · 7天免费试用 · 可随时取消" }
         return ""
     }
 
