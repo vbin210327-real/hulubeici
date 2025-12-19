@@ -3301,7 +3301,7 @@ private struct WordSectionDetailView: View {
             }
         }
         .background(Color(.systemGray6))
-        .tabViewStyle(.page(indexDisplayMode: .automatic))
+        .tabViewStyle(.page(indexDisplayMode: .never))
         .navigationTitle(section.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -5125,6 +5125,11 @@ private enum BundledWordBookLoader {
             fileName: "6 托福-乱序",
             title: "托福词汇乱序",
             sectionID: UUID(uuidString: "A2E1E629-189A-4D38-BC86-1B96E989F24C")!
+        ),
+        .init(
+            fileName: "7 雅思-乱序",
+            title: "雅思词汇乱序",
+            sectionID: UUID(uuidString: "E4940D9C-CE58-472A-8425-75C2B1413AC8")!
         )
     ]
 
