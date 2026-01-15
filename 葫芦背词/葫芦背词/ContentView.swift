@@ -5092,6 +5092,14 @@ private enum BundledWordBookLoader {
         let fileName: String
         let title: String
         let sectionID: UUID
+        let subtitleSuffix: String
+
+        init(fileName: String, title: String, sectionID: UUID, subtitleSuffix: String = "乱序") {
+            self.fileName = fileName
+            self.title = title
+            self.sectionID = sectionID
+            self.subtitleSuffix = subtitleSuffix
+        }
     }
 
     private static let resourceExtension = "txt"
@@ -5130,6 +5138,11 @@ private enum BundledWordBookLoader {
             fileName: "7 雅思-乱序",
             title: "雅思词汇乱序",
             sectionID: UUID(uuidString: "E4940D9C-CE58-472A-8425-75C2B1413AC8")!
+        ),
+        .init(
+            fileName: "考研核心词",
+            title: "考研核心词",
+            sectionID: UUID(uuidString: "CF10CFBC-4556-4D0D-B248-C65F6278CFF8")!
         )
     ]
 
@@ -5160,7 +5173,7 @@ private enum BundledWordBookLoader {
         guard !entries.isEmpty else {
             throw LoaderError.noEntries
         }
-        let subtitle = "共 \(entries.count) 词 · 乱序"
+        let subtitle = "共 \(entries.count) 词 · \(descriptor.subtitleSuffix)"
         return WordSection(
             id: descriptor.sectionID,
             title: descriptor.title,
