@@ -10,6 +10,7 @@ import Foundation
 import UIKit
 import PhotosUI
 import PhotosUI
+import CryptoKit
 
 private let wordsPerPage = 10
 private let recycleBinRetentionInterval: TimeInterval = 30 * 24 * 60 * 60
@@ -2352,7 +2353,7 @@ final class WordBookStore: ObservableObject {
                         title: bundledSection.title,
                         subtitle: bundledSection.subtitle,
                         words: bundledSection.words,
-                        targetPasses: bundledSection.targetPasses
+                        targetPasses: existing.targetPasses
                     )
                     needsSave = true
                 }
@@ -2364,7 +2365,7 @@ final class WordBookStore: ObservableObject {
                         title: bundledSection.title,
                         subtitle: bundledSection.subtitle,
                         words: bundledSection.words,
-                        targetPasses: bundledSection.targetPasses
+                        targetPasses: existing.targetPasses
                     )
                     needsSave = true
                 }
@@ -5169,7 +5170,7 @@ private enum BundledWordBookLoader {
         let rawContent = try String(contentsOf: url, encoding: .utf8)
         let entries = rawContent
             .split(whereSeparator: \.isNewline)
-            .compactMap { makeEntry(from: String($0)) }
+            .compactMap { makeEntry(from: String($0), sectionID: descriptor.sectionID) }
         guard !entries.isEmpty else {
             throw LoaderError.noEntries
         }
@@ -5183,7 +5184,7 @@ private enum BundledWordBookLoader {
         )
     }
 
-    private static func makeEntry(from line: String) -> WordEntry? {
+    private static func makeEntry(from line: String, sectionID: UUID) -> WordEntry? {
         let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
 
@@ -5192,7 +5193,8 @@ private enum BundledWordBookLoader {
             guard !wordPart.isEmpty else { return nil }
             let meaningPart = String(trimmed[bracketIndex...]).trimmingCharacters(in: .whitespacesAndNewlines)
             let meaning = meaningPart.isEmpty ? "-" : meaningPart
-            return WordEntry(word: wordPart, meaning: meaning)
+            let stableID = stableEntryID(sectionID: sectionID, word: wordPart, meaning: meaning)
+            return WordEntry(id: stableID, word: wordPart, meaning: meaning)
         } else {
             let components = trimmed.split(maxSplits: 1, omittingEmptySubsequences: true) { $0.isWhitespace }
             guard let first = components.first else { return nil }
@@ -5200,8 +5202,21 @@ private enum BundledWordBookLoader {
             guard !wordPart.isEmpty else { return nil }
             let meaningPart = components.count > 1 ? String(components[1]).trimmingCharacters(in: .whitespacesAndNewlines) : ""
             let meaning = meaningPart.isEmpty ? "-" : meaningPart
-            return WordEntry(word: wordPart, meaning: meaning)
+            let stableID = stableEntryID(sectionID: sectionID, word: wordPart, meaning: meaning)
+            return WordEntry(id: stableID, word: wordPart, meaning: meaning)
         }
+    }
+
+    private static func stableEntryID(sectionID: UUID, word: String, meaning: String) -> UUID {
+        let input = "\(sectionID.uuidString)|\(word)|\(meaning)"
+        let digest = SHA256.hash(data: Data(input.utf8))
+        let bytes = Array(digest)
+        return UUID(uuid: (
+            bytes[0], bytes[1], bytes[2], bytes[3],
+            bytes[4], bytes[5], bytes[6], bytes[7],
+            bytes[8], bytes[9], bytes[10], bytes[11],
+            bytes[12], bytes[13], bytes[14], bytes[15]
+        ))
     }
 }
 
