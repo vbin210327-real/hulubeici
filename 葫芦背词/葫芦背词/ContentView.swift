@@ -19,6 +19,24 @@ private let aiAccentGreen = Color(red: 0.23, green: 0.65, blue: 0.44)
 private let recentAccentBlue = Color(red: 0.24, green: 0.52, blue: 0.96)
 private let recycleBinActiveColor = Color(red: 0.86, green: 0.42, blue: 0.18)
 
+private enum DemoMode {
+    static var isEnabled: Bool {
+        #if targetEnvironment(simulator)
+        return true
+        #else
+        return false
+        #endif
+    }
+
+    static func demoMonthDate(from date: Date, calendar: Calendar = .current) -> Date {
+        calendar.date(byAdding: .month, value: -1, to: date) ?? date
+    }
+
+    static let demoMiddleSchoolSectionID = UUID(uuidString: "6F359567-8327-4C5D-870A-528A2B5A5364")!
+    static let demoMiddleSchoolTargetPasses = 5
+    static let demoMiddleSchoolCompletedPasses = 3
+}
+
 private func sanitizeUserIdentifier(_ value: String) -> String {
     let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
     var result = ""
@@ -506,6 +524,7 @@ private struct ProgressOverviewView: View {
     @State private var selectedYear: Int = Calendar.current.component(.year, from: Date())
     @State private var selectedMonth: Int = Calendar.current.component(.month, from: Date())
     @State private var selectedSection: WordSection?
+    @State private var didSetDemoMonth = false
 
     var body: some View {
         ScrollView {
@@ -572,6 +591,13 @@ private struct ProgressOverviewView: View {
         .onAppear {
             if selectedSection == nil, let firstSection = bookStore.sections.first {
                 selectedSection = firstSection
+            }
+            if DemoMode.isEnabled && !didSetDemoMonth {
+                let demoDate = DemoMode.demoMonthDate(from: Date())
+                let calendar = Calendar.current
+                selectedYear = calendar.component(.year, from: demoDate)
+                selectedMonth = calendar.component(.month, from: demoDate)
+                didSetDemoMonth = true
             }
         }
     }
@@ -2469,15 +2495,50 @@ struct ContentView: View {
         let bookStore = WordBookStore(userId: userId)
         let progressStore = SectionProgressStore(userId: userId)
         let syncStatus = SyncStatusStore()
+        let dailyProgressStore = DailyProgressStore(userId: userId)
 
         // Wire up sync status
         bookStore.syncStatusStore = syncStatus
         progressStore.syncStatusStore = syncStatus
 
+        #if targetEnvironment(simulator)
+        if DemoMode.isEnabled,
+           let section = bookStore.sections.first(where: { $0.id == DemoMode.demoMiddleSchoolSectionID }) {
+            var effectiveSection = section
+            if section.targetPasses != DemoMode.demoMiddleSchoolTargetPasses {
+                effectiveSection = WordSection(
+                    id: section.id,
+                    title: section.title,
+                    subtitle: section.subtitle,
+                    words: section.words,
+                    targetPasses: DemoMode.demoMiddleSchoolTargetPasses
+                )
+                bookStore.updateSection(effectiveSection)
+            }
+            let totalPages = max(1, (effectiveSection.words.count + wordsPerPage - 1) / wordsPerPage)
+            let existingPages = min(progressStore.completedPages(for: effectiveSection.id), totalPages)
+            progressStore.setProgress(
+                for: effectiveSection.id,
+                completedPages: existingPages,
+                completedPasses: DemoMode.demoMiddleSchoolCompletedPasses
+            )
+            progressStore.clampProgress(
+                for: effectiveSection.id,
+                totalPages: totalPages,
+                targetPasses: effectiveSection.targetPasses
+            )
+        }
+        #endif
+
         _bookStore = StateObject(wrappedValue: bookStore)
         _hideState = StateObject(wrappedValue: WordVisibilityStore(userId: userId))
         _progressStore = StateObject(wrappedValue: progressStore)
-        _dailyProgressStore = StateObject(wrappedValue: DailyProgressStore(userId: userId))
+        #if targetEnvironment(simulator)
+        if DemoMode.isEnabled {
+            dailyProgressStore.seedDemoDataForCurrentMonth(minWords: 700, maxWords: 1000, overwrite: true)
+        }
+        #endif
+        _dailyProgressStore = StateObject(wrappedValue: dailyProgressStore)
         _userProfile = StateObject(wrappedValue: UserProfileStore(userId: userId))
         _syncStatus = StateObject(wrappedValue: syncStatus)
     }
@@ -2492,6 +2553,7 @@ struct ContentView: View {
                     isRootView = true
                 }
                 .task {
+                    guard !DemoMode.isEnabled else { return }
                     await CloudKitSyncService.shared.initialPull(
                         bookStore: bookStore,
                         progressStore: progressStore,
@@ -4759,6 +4821,92 @@ extension DailyProgressStore {
 
     func allRecords() -> [String: Int] { records }
 }
+
+#if targetEnvironment(simulator)
+extension DailyProgressStore {
+    func seedDemoDataForCurrentMonth(minWords: Int = 700, maxWords: Int = 1000, overwrite: Bool = true) {
+        let calendar = Calendar.current
+        let now = Date()
+        let demoDate = DemoMode.demoMonthDate(from: now, calendar: calendar)
+        let components = calendar.dateComponents([.year, .month], from: demoDate)
+        guard let year = components.year,
+              let month = components.month,
+              let firstDay = calendar.date(from: DateComponents(year: year, month: month, day: 1)),
+              let range = calendar.range(of: .day, in: .month, for: firstDay) else {
+            return
+        }
+
+        let lower = min(minWords, maxWords)
+        let upper = max(minWords, maxWords)
+        let demoSeedVersionKey = defaultsKey + ".demoSeedVersion"
+        let demoSeedVersion = 6
+        let storedVersion = defaults.integer(forKey: demoSeedVersionKey)
+        let currentMax = monthlyData(year: year, month: month).map(\.words).max() ?? 0
+        let hasDemoLikeData = currentMax >= lower
+
+        if storedVersion == demoSeedVersion && hasDemoLikeData {
+            return
+        }
+        var daysByWeek: [String: [Int]] = [:]
+        for day in range {
+            guard let date = calendar.date(from: DateComponents(year: year, month: month, day: day)) else {
+                continue
+            }
+            let weekOfYear = calendar.component(.weekOfYear, from: date)
+            let weekYear = calendar.component(.yearForWeekOfYear, from: date)
+            let key = "\(weekYear)-\(weekOfYear)"
+            daysByWeek[key, default: []].append(day)
+        }
+
+        let peakDays = Set([13, 14, 15, 16].filter { range.contains($0) })
+        let requiredDays = Set([1, 31].filter { range.contains($0) })
+        let peakMin = max(lower, upper - 40)
+        let nonPeakMax = max(lower, peakMin - 1)
+
+        var newRecords: [String: Int] = [:]
+        for days in daysByWeek.values {
+            let mustInclude = days.filter { requiredDays.contains($0) }
+            let inWeekPeaks = days.filter { peakDays.contains($0) && !requiredDays.contains($0) }
+            var picked: [Int] = []
+
+            if !mustInclude.isEmpty {
+                picked = Array(mustInclude.prefix(2))
+            }
+
+            if picked.count < 2, !inWeekPeaks.isEmpty {
+                let needed = min(2 - picked.count, inWeekPeaks.count)
+                picked.append(contentsOf: Array(inWeekPeaks.shuffled().prefix(needed)))
+            }
+
+            if picked.count < 2 {
+                let remaining = days.filter { !picked.contains($0) }
+                let needed = min(2 - picked.count, remaining.count)
+                picked.append(contentsOf: Array(remaining.shuffled().prefix(needed)))
+            }
+
+            for day in picked {
+                guard let date = calendar.date(from: DateComponents(year: year, month: month, day: day)) else {
+                    continue
+                }
+                let valueRange = peakDays.contains(day) ? peakMin...upper : lower...nonPeakMax
+                newRecords[dateFormatter.string(from: date)] = Int.random(in: valueRange)
+            }
+        }
+
+        if overwrite {
+            records = newRecords
+        } else {
+            var merged = records
+            for (key, value) in newRecords where merged[key] == nil {
+                merged[key] = value
+            }
+            records = merged
+        }
+
+        defaults.set(demoSeedVersion, forKey: demoSeedVersionKey)
+    }
+}
+#endif
 
 final class UserProfileStore: ObservableObject {
     @Published var userName: String {
